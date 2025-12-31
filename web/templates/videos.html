@@ -5,6 +5,20 @@
 {% block content %}
 <h1>Videos</h1>
 
+<form class="search-box" method="GET" action="/videos">
+    <input type="text" name="q" value="{{ search_query }}" placeholder="Search by speaker, event, or title...">
+    <button type="submit" class="btn">Search</button>
+    {% if search_query %}
+    <a href="/videos" class="btn btn-secondary">Clear</a>
+    {% endif %}
+</form>
+
+{% if search_query %}
+<p style="color: #888; margin-bottom: 1.5rem;">
+    Showing {{ videos|length }} result{% if videos|length != 1 %}s{% endif %} for "{{ search_query }}"
+</p>
+{% endif %}
+
 {% if videos %}
 <div class="video-grid">
     {% for video in videos %}

@@ -57,8 +57,21 @@ def index():
 @app.route('/videos')
 def videos():
     """List all videos."""
+    search_query = request.args.get('q', '').strip()
+
     with DatabaseSession() as session:
-        videos = session.query(Video).order_by(Video.created_at.desc()).all()
+        query = session.query(Video)
+
+        if search_query:
+            search_filter = f'%{search_query}%'
+            query = query.filter(
+                (Video.speaker.ilike(search_filter)) |
+                (Video.event_name.ilike(search_filter)) |
+                (Video.filename.ilike(search_filter)) |
+                (Video.description.ilike(search_filter))
+            )
+
+        videos = query.order_by(Video.created_at.desc()).all()
         video_list = []
         for v in videos:
             transcript = session.query(Transcript).filter(
@@ -79,7 +92,7 @@ def videos():
                 'description': getattr(v, 'description', None),
             })
 
-    return render_template('videos.html', videos=video_list)
+    return render_template('videos.html', videos=video_list, search_query=search_query)
 
 
 @app.route('/transcripts')
