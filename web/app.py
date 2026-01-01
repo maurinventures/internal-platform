@@ -514,9 +514,19 @@ OUTPUT FORMAT - USE THIS EXACT STRUCTURE:
 RULES:
 1. [CLIP X] = EXACT text from transcript data below. Never paraphrase.
 2. [NARRATE] = Your suggested voiceover/narration to bridge clips. Keep it concise (1-2 sentences max).
-3. Pick clips that are COMPLETE THOUGHTS - no mid-sentence fragments
-4. The narration should make the clips feel like ONE cohesive piece
-5. Aim for 3-5 strong clips with narration bridges
+3. BE EXTREMELY SELECTIVE - only use clips that are:
+   - INSPIRING or QUOTABLE (something you'd put on a poster)
+   - COMPLETE sentences that stand alone
+   - EMOTIONALLY resonant, not just mentions of the topic
+4. REJECT clips that are: mundane, mid-sentence, overly specific/contextual, or awkward phrasing
+5. It's better to have 2-3 GREAT clips than 5 mediocre ones
+6. The narration should elevate and connect the clips into a compelling story
+
+WHAT MAKES A GREAT CLIP:
+- "We choose to go to the moon not because it is easy, but because it is hard" ✓ INSPIRING
+- "The leadership is still a key element of what, of the race" ✗ AWKWARD/INCOMPLETE
+- "I believe we must look to the stars" ✓ EVOCATIVE
+- "We're going to develop a process" ✗ MUNDANE/CONTEXTUAL
 
 EXAMPLE OF GOOD OUTPUT:
 ---
