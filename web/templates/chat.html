@@ -1,288 +1,257 @@
 {% extends "base.html" %}
 
-{% block title %}Script Chat - ClipFinder{% endblock %}
+{% block title %}Chat - MV Videos{% endblock %}
 
 {% block content %}
 <style>
-    /* Claude-style chat interface */
-    .chat-wrapper {
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 0 1rem;
+    main {
+        max-width: 768px;
+        padding: 0;
     }
 
     .chat-messages {
-        padding-bottom: 120px;
+        padding: 1.5rem;
+        padding-bottom: 140px;
     }
 
     .message {
-        padding: 1.5rem 0;
-        border-bottom: 1px solid #f0f0f0;
-        animation: fadeIn 0.2s ease;
-    }
-
-    .message:last-child {
-        border-bottom: none;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .message-user {
-        background: #f9f9f9;
-        margin: 0 -1rem;
-        padding: 1.5rem 1rem;
+        margin-bottom: 2rem;
     }
 
     .message-header {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
+        gap: 0.625rem;
+        margin-bottom: 0.625rem;
     }
 
-    .message-avatar {
-        width: 28px;
-        height: 28px;
+    .avatar {
+        width: 24px;
+        height: 24px;
         border-radius: 4px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
     }
 
-    .message-user .message-avatar {
-        background: #e5e5e5;
+    .avatar-user {
+        background: #e5e4df;
         color: #666;
     }
 
-    .message-assistant .message-avatar {
+    .avatar-assistant {
         background: #d97757;
         color: white;
     }
 
     .message-name {
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
         color: #1a1a1a;
     }
 
-    .message-content {
+    .message-body {
         color: #374151;
         line-height: 1.7;
-        font-size: 0.95rem;
+        font-size: 0.9375rem;
     }
 
-    .message-content p {
-        margin-bottom: 1rem;
+    .message-body p {
+        margin-bottom: 0.875rem;
     }
 
-    .message-content p:last-child {
+    .message-body p:last-child {
         margin-bottom: 0;
     }
 
-    .message-content ul {
+    .message-body ul {
         margin: 0.75rem 0;
-        padding-left: 1.5rem;
+        padding-left: 1.25rem;
     }
 
-    .message-content li {
-        margin-bottom: 0.5rem;
-        color: #4b5563;
+    .message-body li {
+        margin-bottom: 0.375rem;
+        color: #555;
     }
 
-    .message-content strong {
+    .message-body strong {
         font-weight: 600;
         color: #1a1a1a;
     }
 
-    /* Script block styling */
-    .script-block {
-        background: #f8f9fa;
+    /* Script output */
+    .script-output {
+        background: #faf9f7;
         border-left: 3px solid #d97757;
-        padding: 1.25rem 1.5rem;
+        padding: 1.25rem;
         margin: 1rem 0;
-        border-radius: 0 8px 8px 0;
-    }
-
-    .script-block p {
-        margin-bottom: 0.75rem;
-        font-size: 1rem;
-        line-height: 1.8;
+        border-radius: 0 6px 6px 0;
     }
 
     .script-title {
-        font-weight: 700;
+        font-weight: 600;
+        font-size: 1rem;
         color: #1a1a1a;
-        font-size: 1.1rem;
         margin-bottom: 1rem;
         padding-bottom: 0.5rem;
-        border-bottom: 1px solid #e5e5e5;
+        border-bottom: 1px solid #e5e4df;
     }
 
-    /* Clips panel */
-    .clips-panel {
-        margin-top: 1.5rem;
+    .script-output p {
+        margin-bottom: 0.625rem;
+        line-height: 1.8;
+    }
+
+    /* Clips section */
+    .clips-section {
+        margin-top: 1.25rem;
         padding-top: 1rem;
-        border-top: 1px solid #e5e5e5;
+        border-top: 1px solid #e5e4df;
     }
 
-    .clips-summary {
+    .clips-meta {
         display: flex;
-        gap: 1.5rem;
-        padding: 0.75rem 0;
-        font-size: 0.85rem;
-        color: #6b7280;
+        gap: 1.25rem;
+        font-size: 0.8125rem;
+        color: #666;
+        margin-bottom: 0.75rem;
     }
 
-    .clips-summary span {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
+    .clips-meta strong {
+        color: #1a1a1a;
     }
 
-    .clips-summary strong {
-        color: #374151;
-    }
-
-    .toggle-btn {
+    .toggle-clips {
         background: none;
-        border: 1px solid #e5e5e5;
-        color: #6b7280;
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        font-size: 0.85rem;
+        border: 1px solid #e5e4df;
+        color: #666;
+        padding: 0.375rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8125rem;
         cursor: pointer;
-        transition: all 0.15s;
         font-family: inherit;
+        transition: all 0.15s;
     }
 
-    .toggle-btn:hover {
-        background: #f9fafb;
-        border-color: #d1d5db;
-        color: #374151;
+    .toggle-clips:hover {
+        background: #faf9f7;
+        color: #1a1a1a;
     }
 
-    .clips-details {
+    .clips-list {
         display: none;
-        margin-top: 1rem;
+        margin-top: 0.75rem;
     }
 
-    .clips-details.show {
+    .clips-list.show {
         display: block;
     }
 
-    .clip-item {
-        padding: 1rem;
-        border: 1px solid #e5e5e5;
-        border-radius: 8px;
-        margin-bottom: 0.75rem;
+    .clip {
+        padding: 0.875rem;
+        border: 1px solid #e5e4df;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
         background: #fff;
     }
 
-    .clip-item.verified {
-        border-left: 3px solid #10b981;
+    .clip.verified {
+        border-left: 3px solid #22c55e;
     }
 
     .clip-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.375rem;
     }
 
-    .clip-number {
+    .clip-num {
         font-weight: 600;
+        font-size: 0.8125rem;
         color: #1a1a1a;
-        font-size: 0.9rem;
     }
 
-    .clip-badge {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.5rem;
-        border-radius: 4px;
+    .clip-verified {
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.375rem;
+        background: #dcfce7;
+        color: #15803d;
+        border-radius: 3px;
         font-weight: 500;
         text-transform: uppercase;
     }
 
-    .clip-badge.verified {
-        background: #d1fae5;
-        color: #059669;
-    }
-
-    .clip-meta {
-        font-size: 0.8rem;
-        color: #6b7280;
+    .clip-info {
+        font-size: 0.75rem;
+        color: #666;
         margin-bottom: 0.5rem;
     }
 
-    .clip-text {
+    .clip-quote {
         font-style: italic;
-        color: #4b5563;
-        font-size: 0.9rem;
-        line-height: 1.5;
-        background: #f9fafb;
-        padding: 0.75rem;
+        color: #444;
+        font-size: 0.875rem;
+        background: #faf9f7;
+        padding: 0.625rem;
         border-radius: 4px;
+        line-height: 1.5;
     }
 
-    .create-btn {
-        margin-top: 1rem;
+    .export-btn {
+        margin-top: 0.75rem;
         width: 100%;
-        padding: 0.75rem;
+        padding: 0.625rem;
         background: #1a1a1a;
         color: white;
         border: none;
-        border-radius: 8px;
-        font-size: 0.9rem;
+        border-radius: 6px;
+        font-size: 0.8125rem;
         font-weight: 500;
         cursor: pointer;
         font-family: inherit;
-        transition: background 0.15s;
     }
 
-    .create-btn:hover {
+    .export-btn:hover {
         background: #333;
     }
 
-    /* Input area - fixed at bottom */
-    .input-container {
+    /* Input area */
+    .input-area {
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
-        background: white;
-        border-top: 1px solid #e5e5e5;
+        background: #f5f4ef;
+        border-top: 1px solid #e5e4df;
         padding: 1rem;
     }
 
-    .input-wrapper {
-        max-width: 800px;
+    .input-wrap {
+        max-width: 768px;
         margin: 0 auto;
     }
 
     .input-box {
         display: flex;
         align-items: center;
-        border: 1px solid #d1d5db;
-        border-radius: 12px;
         background: #fff;
+        border: 1px solid #e5e4df;
+        border-radius: 8px;
         overflow: hidden;
     }
 
     .input-box:focus-within {
         border-color: #d97757;
-        box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
     }
 
     .chat-input {
         flex: 1;
-        padding: 0.875rem 1rem;
+        padding: 0.75rem 1rem;
         border: none;
-        font-size: 0.95rem;
+        font-size: 0.9375rem;
         color: #1a1a1a;
         background: transparent;
         outline: none;
@@ -290,23 +259,22 @@
     }
 
     .chat-input::placeholder {
-        color: #9ca3af;
+        color: #999;
     }
 
     .send-btn {
         padding: 0.5rem;
-        margin: 0.375rem;
+        margin: 0.25rem;
         background: #1a1a1a;
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 6px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 36px;
-        height: 36px;
-        transition: background 0.15s;
+        width: 32px;
+        height: 32px;
     }
 
     .send-btn:hover {
@@ -314,308 +282,269 @@
     }
 
     .send-btn:disabled {
-        background: #e5e5e5;
+        background: #e5e4df;
         cursor: not-allowed;
     }
 
     .send-btn svg {
-        width: 18px;
-        height: 18px;
+        width: 16px;
+        height: 16px;
     }
 
-    /* Suggestions */
-    .suggestions {
+    .quick-prompts {
         display: flex;
+        gap: 0.375rem;
+        margin-top: 0.5rem;
         flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
     }
 
-    .suggestion-chip {
-        padding: 0.375rem 0.75rem;
-        background: #f3f4f6;
-        border: none;
-        border-radius: 16px;
-        color: #4b5563;
-        font-size: 0.8rem;
+    .quick-prompt {
+        padding: 0.25rem 0.625rem;
+        background: #fff;
+        border: 1px solid #e5e4df;
+        border-radius: 12px;
+        color: #666;
+        font-size: 0.75rem;
         cursor: pointer;
         font-family: inherit;
-        transition: all 0.15s;
     }
 
-    .suggestion-chip:hover {
-        background: #e5e7eb;
-        color: #1f2937;
+    .quick-prompt:hover {
+        background: #faf9f7;
+        color: #1a1a1a;
     }
 
-    /* Typing indicator */
-    .typing-indicator {
+    /* Typing */
+    .typing {
         display: flex;
-        gap: 4px;
-        padding: 0.5rem 0;
+        gap: 3px;
     }
 
-    .typing-indicator span {
-        width: 6px;
-        height: 6px;
-        background: #9ca3af;
+    .typing span {
+        width: 5px;
+        height: 5px;
+        background: #999;
         border-radius: 50%;
-        animation: bounce 1.4s infinite ease-in-out;
+        animation: typing 1.4s infinite ease-in-out;
     }
 
-    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    .typing span:nth-child(1) { animation-delay: -0.32s; }
+    .typing span:nth-child(2) { animation-delay: -0.16s; }
 
-    @keyframes bounce {
+    @keyframes typing {
         0%, 80%, 100% { transform: scale(0); }
         40% { transform: scale(1); }
     }
 
-    .context-info {
+    .context-note {
         font-size: 0.75rem;
-        color: #9ca3af;
+        color: #999;
         margin-top: 0.5rem;
     }
 </style>
 
-<div class="chat-wrapper">
-    <div class="chat-messages" id="chatMessages">
-        <div class="message message-assistant">
-            <div class="message-header">
-                <div class="message-avatar">C</div>
-                <span class="message-name">ClipFinder</span>
-            </div>
-            <div class="message-content">
-                <p>I'm your script generation assistant. I have access to <strong>177 transcribed videos</strong> with over <strong>20,000 transcript segments</strong>.</p>
-                <p>Describe the video you want to create and I'll find the best clips:</p>
-                <ul>
-                    <li>"Create a 60-second script about leadership and vision"</li>
-                    <li>"Find emotional moments about space exploration from 2020 onward"</li>
-                    <li>"What powerful quotes are there about America's future?"</li>
-                </ul>
-            </div>
+<div class="chat-messages" id="chatMessages">
+    <div class="message">
+        <div class="message-header">
+            <div class="avatar avatar-assistant">M</div>
+            <span class="message-name">MV Videos</span>
+        </div>
+        <div class="message-body">
+            <p>I can help you create video scripts from your library of <strong>177 transcribed videos</strong>.</p>
+            <p>Tell me what you're looking for:</p>
+            <ul>
+                <li>"Create a 60-second script about leadership"</li>
+                <li>"Find powerful clips about space exploration"</li>
+                <li>"What are the most inspiring moments about innovation?"</li>
+            </ul>
         </div>
     </div>
 </div>
 
-<div class="input-container">
-    <div class="input-wrapper">
+<div class="input-area">
+    <div class="input-wrap">
         <div class="input-box">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Describe the script you want..." onkeypress="handleKeyPress(event)">
+            <input type="text" class="chat-input" id="chatInput" placeholder="What kind of script do you want to create?" onkeypress="handleKeyPress(event)">
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                 </svg>
             </button>
         </div>
-        <div class="suggestions">
-            <button class="suggestion-chip" onclick="sendSuggestion('Create a 60-second leadership script')">Leadership</button>
-            <button class="suggestion-chip" onclick="sendSuggestion('Find inspiring clips about space exploration')">Space</button>
-            <button class="suggestion-chip" onclick="sendSuggestion('Create a motivational video about innovation')">Innovation</button>
-            <button class="suggestion-chip" onclick="sendSuggestion('Find clips about America\\'s future')">America</button>
+        <div class="quick-prompts">
+            <button class="quick-prompt" onclick="send('Create a 60-second leadership script')">Leadership</button>
+            <button class="quick-prompt" onclick="send('Find clips about space exploration')">Space</button>
+            <button class="quick-prompt" onclick="send('Create a motivational video about innovation')">Innovation</button>
+            <button class="quick-prompt" onclick="send('Find inspiring clips from 2020 onward')">Recent</button>
         </div>
     </div>
 </div>
 
 <script>
-    const chatMessages = document.getElementById('chatMessages');
-    const chatInput = document.getElementById('chatInput');
-    const sendBtn = document.getElementById('sendBtn');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+let history = [];
+let clips = [];
 
-    let conversationHistory = [];
-    let currentClips = [];
+function format(text) {
+    text = text.replace(/```json[\s\S]*?```/g, '');
+    text = text.replace(/---\s*\n?\*\*\[(.*?)\]\*\*\s*\n([\s\S]*?)\n?---/g, (m, title, content) => {
+        const lines = content.trim().split('\n').filter(l => l.trim());
+        return `<div class="script-output"><div class="script-title">${title}</div>${lines.map(l => `<p>${l.trim()}</p>`).join('')}</div>`;
+    });
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    const paras = text.split('\n\n').filter(p => p.trim());
+    return paras.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
 
-    function formatMessage(text) {
-        // Remove JSON blocks
-        text = text.replace(/```json[\s\S]*?```/g, '');
+function addMsg(content, isUser, clipData = [], ctx = 0) {
+    const div = document.createElement('div');
+    div.className = 'message';
 
-        // Format script blocks
-        text = text.replace(/---\s*\n?\*\*\[(.*?)\]\*\*\s*\n([\s\S]*?)\n?---/g, (match, title, content) => {
-            const lines = content.trim().split('\n').filter(l => l.trim());
-            const formatted = lines.map(l => `<p>${l.trim()}</p>`).join('');
-            return `<div class="script-block"><div class="script-title">${title}</div>${formatted}</div>`;
+    let html = `
+        <div class="message-header">
+            <div class="avatar avatar-${isUser ? 'user' : 'assistant'}">${isUser ? 'Y' : 'M'}</div>
+            <span class="message-name">${isUser ? 'You' : 'MV Videos'}</span>
+        </div>
+        <div class="message-body">${format(content)}`;
+
+    if (!isUser && clipData.length > 0) {
+        clips = clipData;
+        const dur = clipData.reduce((s, c) => s + (c.duration || c.end_time - c.start_time), 0);
+        const verified = clipData.filter(c => c.verified).length;
+        const id = 'clips-' + Date.now();
+
+        html += `<div class="clips-section">
+            <div class="clips-meta">
+                <span><strong>${clipData.length}</strong> clips</span>
+                <span><strong>${dur.toFixed(0)}s</strong> total</span>
+                <span><strong>${verified}/${clipData.length}</strong> verified</span>
+            </div>
+            <button class="toggle-clips" onclick="toggle('${id}')">Show clips</button>
+            <div id="${id}" class="clips-list">`;
+
+        clipData.forEach((c, i) => {
+            const d = c.duration || c.end_time - c.start_time;
+            html += `
+                <div class="clip ${c.verified ? 'verified' : ''}">
+                    <div class="clip-header">
+                        <span class="clip-num">Clip ${i + 1}</span>
+                        ${c.verified ? '<span class="clip-verified">Verified</span>' : ''}
+                    </div>
+                    <div class="clip-info">${c.video_title} &bull; ${c.start_time?.toFixed(1)}s - ${c.end_time?.toFixed(1)}s (${d.toFixed(1)}s)</div>
+                    <div class="clip-quote">"${c.text}"</div>
+                </div>`;
         });
 
-        // Convert markdown
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-        // Convert paragraphs
-        const paragraphs = text.split('\n\n').filter(p => p.trim());
-        return paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+        html += `</div><button class="export-btn" onclick="exportScript()">Export Script</button></div>`;
     }
 
-    function addMessage(content, isUser, clips = [], contextCount = 0) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message message-${isUser ? 'user' : 'assistant'}`;
+    if (!isUser && ctx > 0) {
+        html += `<div class="context-note">Searched ${ctx.toLocaleString()} segments</div>`;
+    }
 
-        let html = `
-            <div class="message-header">
-                <div class="message-avatar">${isUser ? 'Y' : 'C'}</div>
-                <span class="message-name">${isUser ? 'You' : 'ClipFinder'}</span>
-            </div>
-            <div class="message-content">${formatMessage(content)}`;
+    html += '</div>';
+    div.innerHTML = html;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
-        if (!isUser && clips.length > 0) {
-            currentClips = clips;
-            const totalDuration = clips.reduce((sum, c) => sum + (c.duration || (c.end_time - c.start_time)), 0);
-            const verifiedCount = clips.filter(c => c.verified).length;
-            const clipsPanelId = 'clips-' + Date.now();
+function showTyping() {
+    const div = document.createElement('div');
+    div.className = 'message';
+    div.id = 'typing';
+    div.innerHTML = `
+        <div class="message-header">
+            <div class="avatar avatar-assistant">M</div>
+            <span class="message-name">MV Videos</span>
+        </div>
+        <div class="message-body">
+            <div class="typing"><span></span><span></span><span></span></div>
+        </div>`;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
-            html += `<div class="clips-panel">
-                <div class="clips-summary">
-                    <span><strong>${clips.length}</strong> clips</span>
-                    <span><strong>${totalDuration.toFixed(0)}s</strong> total</span>
-                    <span><strong>${verifiedCount}/${clips.length}</strong> verified</span>
-                </div>
-                <button class="toggle-btn" onclick="toggleDetails('${clipsPanelId}')">Show source clips</button>
-                <div id="${clipsPanelId}" class="clips-details">`;
+function hideTyping() {
+    const el = document.getElementById('typing');
+    if (el) el.remove();
+}
 
-            clips.forEach((clip, i) => {
-                const verified = clip.verified;
-                const duration = clip.duration || (clip.end_time - clip.start_time);
-                html += `
-                    <div class="clip-item ${verified ? 'verified' : ''}">
-                        <div class="clip-header">
-                            <span class="clip-number">Clip ${i + 1}</span>
-                            ${verified ? '<span class="clip-badge verified">Verified</span>' : ''}
-                        </div>
-                        <div class="clip-meta">
-                            ${clip.video_title || ''} &bull; ${clip.start_time?.toFixed(1)}s - ${clip.end_time?.toFixed(1)}s (${duration.toFixed(1)}s)
-                        </div>
-                        <div class="clip-text">"${clip.text || ''}"</div>
-                    </div>`;
-            });
+async function sendMessage() {
+    const msg = chatInput.value.trim();
+    if (!msg) return;
 
-            html += `</div>
-                <button class="create-btn" onclick="createVideo()">Export Edit Script</button>
-            </div>`;
+    addMsg(msg, true);
+    history.push({ role: 'user', content: msg });
+
+    chatInput.value = '';
+    sendBtn.disabled = true;
+    chatInput.disabled = true;
+    showTyping();
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, history: history })
+        });
+        const data = await res.json();
+        hideTyping();
+
+        if (data.error) {
+            addMsg('Error: ' + data.error, false);
+        } else {
+            let text = data.response.replace(/```json[\s\S]*?```/g, '');
+            addMsg(text, false, data.clips || [], data.context_segments || 0);
+            history.push({ role: 'assistant', content: data.response });
         }
-
-        if (!isUser && contextCount > 0) {
-            html += `<div class="context-info">Searched ${contextCount.toLocaleString()} segments</div>`;
-        }
-
-        html += '</div>';
-        messageDiv.innerHTML = html;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    } catch (e) {
+        hideTyping();
+        addMsg('Connection error. Please try again.', false);
     }
 
-    function addTypingIndicator() {
-        const indicator = document.createElement('div');
-        indicator.className = 'message message-assistant';
-        indicator.id = 'typingIndicator';
-        indicator.innerHTML = `
-            <div class="message-header">
-                <div class="message-avatar">C</div>
-                <span class="message-name">ClipFinder</span>
-            </div>
-            <div class="message-content">
-                <div class="typing-indicator">
-                    <span></span><span></span><span></span>
-                </div>
-            </div>`;
-        chatMessages.appendChild(indicator);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    sendBtn.disabled = false;
+    chatInput.disabled = false;
+    chatInput.focus();
+}
 
-    function removeTypingIndicator() {
-        const indicator = document.getElementById('typingIndicator');
-        if (indicator) indicator.remove();
-    }
+function send(text) {
+    chatInput.value = text;
+    sendMessage();
+}
 
-    async function sendMessage() {
-        const message = chatInput.value.trim();
-        if (!message) return;
-
-        addMessage(message, true);
-        conversationHistory.push({ role: 'user', content: message });
-
-        chatInput.value = '';
-        sendBtn.disabled = true;
-        chatInput.disabled = true;
-
-        addTypingIndicator();
-
-        try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: message,
-                    history: conversationHistory
-                })
-            });
-
-            const data = await response.json();
-            removeTypingIndicator();
-
-            if (data.error) {
-                addMessage('Sorry, there was an error: ' + data.error, false);
-            } else {
-                let displayMessage = data.response;
-                displayMessage = displayMessage.replace(/```json[\s\S]*?```/g, '');
-                addMessage(displayMessage, false, data.clips || [], data.context_segments || 0);
-                conversationHistory.push({ role: 'assistant', content: data.response });
-            }
-        } catch (error) {
-            removeTypingIndicator();
-            addMessage('Sorry, there was a connection error. Please try again.', false);
-        }
-
-        sendBtn.disabled = false;
-        chatInput.disabled = false;
-        chatInput.focus();
-    }
-
-    function sendSuggestion(text) {
-        chatInput.value = text;
+function handleKeyPress(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
         sendMessage();
     }
+}
 
-    function handleKeyPress(event) {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage();
-        }
+function toggle(id) {
+    const el = document.getElementById(id);
+    const btn = el.previousElementSibling;
+    el.classList.toggle('show');
+    btn.textContent = el.classList.contains('show') ? 'Hide clips' : 'Show clips';
+}
+
+async function exportScript() {
+    if (!clips.length) return;
+    const name = prompt('Script name:', 'My Script');
+    if (!name) return;
+
+    const res = await fetch('/api/chat/create-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clips, title: name })
+    });
+    const data = await res.json();
+    if (data.success) {
+        addMsg(`Exported to **${data.folder}**. Duration: ${data.total_duration.toFixed(1)}s`, false);
     }
+}
 
-    function toggleDetails(id) {
-        const el = document.getElementById(id);
-        const btn = el.previousElementSibling;
-        if (el.classList.contains('show')) {
-            el.classList.remove('show');
-            btn.textContent = 'Show source clips';
-        } else {
-            el.classList.add('show');
-            btn.textContent = 'Hide source clips';
-        }
-    }
-
-    async function createVideo() {
-        if (currentClips.length === 0) return;
-
-        const title = prompt('Name this script:', 'Leadership Script');
-        if (!title) return;
-
-        try {
-            const response = await fetch('/api/chat/create-video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clips: currentClips, title: title })
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                addMessage(`Edit script exported to **${data.folder}**. Total duration: ${data.total_duration.toFixed(1)}s. Check the Edit Scripts section.`, false);
-            }
-        } catch (error) {
-            addMessage('Error creating script: ' + error.message, false);
-        }
-    }
-
-    chatInput.focus();
+chatInput.focus();
 </script>
 {% endblock %}
