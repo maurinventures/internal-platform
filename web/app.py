@@ -417,46 +417,63 @@ def validate_clips_against_database(clips: list) -> list:
 def generate_script_with_ai(user_message: str, transcript_context: list, conversation_history: list):
     """Generate a script using AI with verified transcript data."""
 
-    # Build context from transcripts
+    # Build context from transcripts - group by video for better context
     context_text = ""
     for t in transcript_context[:300]:  # Limit context size
-        context_text += f"[{t['video_title']} | {t['speaker']} | {t['start']:.1f}s-{t['end']:.1f}s]\n"
-        context_text += f"Video ID: {t['video_id']}\n"
+        context_text += f"[{t['video_title']} | {t['start']:.1f}s-{t['end']:.1f}s | ID:{t['video_id']}]\n"
         context_text += f'"{t["text"]}"\n\n'
 
-    system_prompt = """You are a video script assistant with access to a library of video transcripts. Your job is to help create compelling video scripts by finding and combining the best clips from the available footage.
+    system_prompt = """You are an expert video editor and storyteller. Your job is to create COHERENT, MEANINGFUL scripts by combining clips from available footage.
 
-CRITICAL RULES FOR ACCURACY:
-1. ONLY use clips from the transcript data provided below
-2. Use EXACT video IDs, timestamps, and text from the data
-3. Never invent or approximate - if you can't find a good match, say so
-4. Always include the video_id, start_time, end_time, and exact text for each clip
+CRITICAL - NARRATIVE COHERENCE:
+- The script must tell a STORY or make a POINT that flows logically
+- Each clip must connect to the next - think about transitions
+- The message should build: Opening hook → Development → Climax → Resolution
+- Avoid random quotes thrown together - every clip must serve the narrative
+- Read the script out loud in your head - does it sound like ONE speech?
 
-When creating a script:
-- Pick clips that flow naturally together
-- Aim for the requested duration (usually 60 seconds)
-- Each clip should be a complete thought
-- Build a narrative arc: hook → build → climax → close
+SCRIPT STRUCTURE FOR 60 SECONDS:
+1. HOOK (10-15s): Grab attention with a bold statement or question
+2. BUILD (20-25s): Develop the theme with supporting points
+3. CLIMAX (15-20s): The most powerful/emotional moment
+4. CLOSE (10-15s): Land the message with impact
 
-AVAILABLE TRANSCRIPT DATA:
-""" + context_text + """
+ACCURACY RULES:
+- ONLY use clips from the transcript data below
+- Use EXACT text and timestamps from the data
+- If you can't find clips that make a coherent story, say so
+- Never invent quotes or approximate timestamps
 
-When suggesting clips, format each clip as:
-VIDEO: [filename]
-ID: [video_id]
-TIME: [start]s - [end]s ([duration]s)
-TEXT: "[exact text]"
+RESPONSE FORMAT:
+First, present the script as CLEAN TEXT that can be read aloud - no timestamps, no video IDs, just the words:
 
-At the end, provide a JSON block with the clips:
+---
+**[SCRIPT TITLE]**
+
+[Opening line from first clip]
+
+[Next line flowing naturally...]
+
+[Building to the key message...]
+
+[Powerful closing line]
+---
+
+Then explain briefly why this script works (1-2 sentences).
+
+Finally, provide the technical details in JSON:
 ```json
 {
   "title": "Script Title",
   "total_duration": 60,
   "clips": [
-    {"video_id": "...", "start_time": 10.0, "end_time": 22.0, "text": "..."}
+    {"video_id": "...", "video_title": "...", "start_time": 10.0, "end_time": 22.0, "text": "..."}
   ]
 }
-```"""
+```
+
+AVAILABLE TRANSCRIPT DATA:
+""" + context_text
 
     # Build messages
     messages = [{"role": "system", "content": system_prompt}]
