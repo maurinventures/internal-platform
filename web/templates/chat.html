@@ -2080,6 +2080,11 @@ async function sendMessage() {
         if (data.error) {
             addMsg('Error: ' + data.error, false);
         } else {
+            // Track for feedback BEFORE rendering buttons
+            lastQuery = msg;
+            lastScript = data.response;
+            lastModel = model;
+
             let text = data.response.replace(/```json[\s\S]*?```/g, '');
             addMsg(text, false, data.clips || [], data.context_segments || 0);
             history.push({ role: 'assistant', content: data.response });
@@ -2090,11 +2095,6 @@ async function sendMessage() {
                 conv.title = msg.substring(0, 50) + (msg.length > 50 ? '...' : '');
                 renderConversations();
             }
-
-            // Track for feedback
-            lastQuery = msg;
-            lastScript = data.response;
-            lastModel = model;
         }
     } catch (e) {
         hideTyping();
