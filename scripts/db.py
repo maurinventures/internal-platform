@@ -51,6 +51,7 @@ class Video(Base):
     event_name = Column(String(255))
     event_date = Column(Date)
     description = Column(Text)
+    thumbnail_s3_key = Column(String(1000))  # Pre-generated thumbnail
 
     # Relationships
     transcripts = relationship("Transcript", back_populates="video", cascade="all, delete-orphan")
@@ -189,6 +190,137 @@ class ProcessingJob(Base):
     completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ScriptFeedback(Base):
+    """Store user feedback on generated scripts for few-shot learning."""
+
+    __tablename__ = "script_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    query = Column(Text, nullable=False)  # What the user asked for
+    script = Column(Text, nullable=False)  # The generated script
+    clips_json = Column(JSONB, default=[])  # The clips used
+    rating = Column(Integer, nullable=False)  # 1 = good (thumbs up), -1 = bad (thumbs down)
+    model = Column(String(50))  # Which model generated it
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class User(Base):
+    """Team members who can use the system."""
+
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_login = Column(DateTime(timezone=True))
+
+    # Relationships
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+
+
+class Conversation(Base):
+    """Chat conversations for script generation."""
+
+    __tablename__ = "conversations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    title = Column(String(255), nullable=False, default="New Chat")
+    video_id = Column(UUID(as_uuid=True), ForeignKey("videos.id", ondelete="SET NULL"), nullable=True)
+    is_collaborative = Column(Integer, default=0)  # 1 if shared with team
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="conversations")
+    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+    video = relationship("Video")
+    participants = relationship("ChatParticipant", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    """Individual messages within a conversation."""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Who sent it
+    role = Column(String(20), nullable=False)  # 'user', 'assistant', or 'system'
+    content = Column(Text, nullable=False)
+    clips_json = Column(JSONB, default=[])  # Clips associated with this message (for assistant messages)
+    mentions = Column(JSONB, default=[])  # List of user IDs or 'mv-video' mentioned
+    model = Column(String(50))  # Which model generated it (for assistant messages)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+    sender = relationship("User", foreign_keys=[user_id])
+
+
+class ChatParticipant(Base):
+    """Users invited to collaborate on a conversation."""
+
+    __tablename__ = "chat_participants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), default="member")  # 'owner', 'member'
+    invited_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    joined_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("conversation_id", "user_id"),)
+
+    # Relationships
+    conversation = relationship("Conversation")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class ClipComment(Base):
+    """Comments on specific clips within a conversation."""
+
+    __tablename__ = "clip_comments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    clip_index = Column(Integer, nullable=False)  # Which clip in the message's clips_json
+    content = Column(Text, nullable=False)
+    mentions = Column(JSONB, default=[])  # @mentions in comment
+    is_regenerate_request = Column(Integer, default=0)  # 1 if this is a request to regenerate the clip
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    conversation = relationship("Conversation")
+    message = relationship("ChatMessage")
+    user = relationship("User")
+
+
+class VoiceAvatar(Base):
+    """AI voice clones for speakers."""
+
+    __tablename__ = "voice_avatars"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    speaker_name = Column(String(255), nullable=False, unique=True)
+    provider = Column(String(50), default="elevenlabs")  # elevenlabs, playht, etc.
+    external_voice_id = Column(String(255))  # Voice ID from the provider
+    sample_video_ids = Column(JSONB, default=[])  # Video IDs used to train the voice
+    status = Column(String(50), default="pending")  # pending, training, ready, failed
+    settings = Column(JSONB, default={})  # Provider-specific settings
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    creator = relationship("User")
 
 
 # Database session management

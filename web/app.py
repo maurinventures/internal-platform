@@ -10,13 +10,27 @@ from uuid import UUID
 
 from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, session
 from openai import OpenAI
+import anthropic
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, CompiledVideo
+import boto3
+from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, CompiledVideo, ScriptFeedback, Conversation, ChatMessage, User
+import hashlib
 from scripts.storylines import get_cached_storylines, generate_storylines, Storyline
 from scripts.config_loader import get_config
+
+
+def get_s3_client():
+    """Get configured S3 client."""
+    config = get_config()
+    return boto3.client(
+        "s3",
+        aws_access_key_id=config.secrets.get("aws", {}).get("access_key_id"),
+        aws_secret_access_key=config.secrets.get("aws", {}).get("secret_access_key"),
+        region_name=config.settings.get("aws", {}).get("region", "us-east-1"),
+    )
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -94,6 +108,7 @@ def videos():
                 'event_name': getattr(v, 'event_name', None),
                 'event_date': getattr(v, 'event_date', None),
                 'description': getattr(v, 'description', None),
+                'extra_data': getattr(v, 'extra_data', None) or {},
             })
 
     return render_template('videos.html', videos=video_list, search_query=search_query)
@@ -140,16 +155,24 @@ def transcript_detail(transcript_id):
             TranscriptSegment.transcript_id == transcript.id
         ).order_by(TranscriptSegment.start_time).all()
 
+        # Get known speakers from video metadata
+        known_speaker = video.speaker if video else None
+
         segment_list = [{
+            'id': str(s.id),
             'start': float(s.start_time),
             'end': float(s.end_time),
             'text': s.text,
+            'speaker': s.speaker or None,
         } for s in segments]
 
         return render_template('transcript_detail.html',
                              transcript_id=transcript_id,
+                             video_id=str(video.id) if video else None,
                              video_title=video.filename if video else "Unknown",
-                             segments=segment_list)
+                             known_speaker=known_speaker,
+                             segments=segment_list,
+                             total_duration=float(video.duration_seconds) if video and video.duration_seconds else 0)
 
 
 @app.route('/transcripts/search')
@@ -270,11 +293,43 @@ def get_openai_client():
     return OpenAI(api_key=api_key)
 
 
-def search_transcripts_for_context(query: str, limit: int = 800):
-    """Search transcripts for relevant segments based on query keywords."""
-    # Extract keywords from query - get meaningful words
-    stop_words = {'want', 'need', 'like', 'make', 'create', 'find', 'give', 'about', 'from', 'with', 'that', 'this', 'have', 'will', 'would', 'could', 'should', 'video', 'script', 'clips', 'second', 'minute'}
-    keywords = [w for w in re.findall(r'\b\w{4,}\b', query.lower()) if w not in stop_words]
+def get_anthropic_client():
+    """Get Anthropic client."""
+    config = get_config()
+    api_key = config.secrets.get("anthropic", {}).get("api_key")
+    if not api_key:
+        raise ValueError("Anthropic API key not configured. Add your key to config/secrets.yaml")
+    return anthropic.Anthropic(api_key=api_key)
+
+
+# Model mapping
+MODEL_MAP = {
+    # Claude models
+    "claude-sonnet": "claude-sonnet-4-20250514",
+    "claude-opus": "claude-opus-4-0-20250514",
+    "claude-haiku": "claude-3-5-haiku-20241022",
+    # OpenAI models
+    "gpt-4o": "gpt-4o",
+    "gpt-4-turbo": "gpt-4-turbo",
+    "gpt-3.5-turbo": "gpt-3.5-turbo",
+}
+
+
+def search_transcripts_for_context(query: str, limit: int = 1000):
+    """Search transcripts for relevant segments based on query keywords.
+
+    IMPROVED: Prioritizes rare/specific keywords over common words.
+    Results matching 'caterpillar' rank higher than those matching 'how'.
+    """
+    # Extract keywords from query - get meaningful words (3+ chars for better matching)
+    stop_words = {'want', 'need', 'like', 'make', 'create', 'find', 'give', 'about', 'from', 'with', 'that', 'this', 'have', 'will', 'would', 'could', 'should', 'video', 'script', 'clips', 'second', 'minute', 'the', 'and', 'for', 'how', 'know', 'talking', 'talk', 'good', 'great', 'thing', 'things', 'way', 'just', 'really', 'very', 'also', 'can', 'get', 'got', 'say', 'said', 'think', 'going', 'look', 'see', 'time', 'year', 'years', 'people', 'work', 'working'}
+    keywords = [w for w in re.findall(r'\b\w{3,}\b', query.lower()) if w not in stop_words]
+
+    # Remove duplicates while preserving order
+    keywords = list(dict.fromkeys(keywords))
+
+    # Debug: log keywords
+    print(f"[DEBUG] Search keywords: {keywords}")
 
     # Extract year filters from query (e.g., "2020", "2023", "from 2020")
     year_pattern = re.findall(r'\b(19\d{2}|20\d{2})\b', query)
@@ -287,6 +342,8 @@ def search_transcripts_for_context(query: str, limit: int = 800):
         min_year = 2020
 
     results = []
+    results_by_id = {}  # Track by segment_id to avoid duplicates and merge scores
+
     with DatabaseSession() as db_session:
         # Get all videos with their full metadata
         videos = db_session.query(Video).all()
@@ -308,14 +365,46 @@ def search_transcripts_for_context(query: str, limit: int = 800):
         else:
             filtered_video_ids = set(video_map.keys())
 
-        # Search for matching segments - use more keywords for better coverage
-        for keyword in keywords[:8]:
+        # First pass: count how many results each keyword returns (to identify rare keywords)
+        keyword_counts = {}
+        for keyword in keywords[:15]:
+            count = db_session.query(TranscriptSegment).join(
+                Transcript, TranscriptSegment.transcript_id == Transcript.id
+            ).filter(
+                TranscriptSegment.text.ilike(f'%{keyword}%'),
+                Transcript.status == 'completed'
+            ).count()
+            keyword_counts[keyword] = count
+            print(f"[DEBUG] Keyword '{keyword}' has {count} matches")
+
+        # Calculate keyword weights - rare keywords get higher weight
+        # A keyword with 10 matches is more specific than one with 100
+        keyword_weights = {}
+        for kw, count in keyword_counts.items():
+            if count == 0:
+                keyword_weights[kw] = 0
+            elif count <= 5:
+                keyword_weights[kw] = 10  # Very specific - highest priority
+            elif count <= 20:
+                keyword_weights[kw] = 5   # Specific
+            elif count <= 50:
+                keyword_weights[kw] = 2   # Moderate
+            else:
+                keyword_weights[kw] = 1   # Common
+
+        print(f"[DEBUG] Keyword weights: {keyword_weights}")
+
+        # Search for matching segments with scoring
+        for keyword in keywords[:15]:
+            if keyword_counts.get(keyword, 0) == 0:
+                continue
+
             segments = db_session.query(TranscriptSegment).join(
                 Transcript, TranscriptSegment.transcript_id == Transcript.id
             ).filter(
                 TranscriptSegment.text.ilike(f'%{keyword}%'),
                 Transcript.status == 'completed'
-            ).limit(200).all()
+            ).limit(100).all()
 
             for seg in segments:
                 transcript = db_session.query(Transcript).filter(
@@ -326,18 +415,53 @@ def search_transcripts_for_context(query: str, limit: int = 800):
                     event_date = video_info.get('event_date')
                     date_str = event_date.strftime('%Y-%m-%d') if event_date else 'Unknown date'
 
-                    results.append({
-                        'video_id': str(transcript.video_id),
-                        'video_title': video_info.get('filename', 'Unknown'),
-                        'speaker': video_info.get('speaker', 'Unknown'),
-                        'event_name': video_info.get('event_name', 'Unknown'),
-                        'event_date': date_str,
-                        'year': video_info.get('year'),
-                        'start': float(seg.start_time),
-                        'end': float(seg.end_time),
-                        'text': seg.text,
-                        'segment_id': str(seg.id)
-                    })
+                    # Get surrounding segments for more complete context (30 seconds around match)
+                    nearby_segments = db_session.query(TranscriptSegment).filter(
+                        TranscriptSegment.transcript_id == seg.transcript_id,
+                        TranscriptSegment.start_time >= float(seg.start_time) - 15,
+                        TranscriptSegment.end_time <= float(seg.end_time) + 15
+                    ).order_by(TranscriptSegment.start_time).all()
+
+                    if nearby_segments:
+                        combined_text = ' '.join(s.text for s in nearby_segments)
+                        start_time = float(nearby_segments[0].start_time)
+                        end_time = float(nearby_segments[-1].end_time)
+                    else:
+                        combined_text = seg.text
+                        start_time = float(seg.start_time)
+                        end_time = float(seg.end_time)
+
+                    seg_key = str(seg.id)
+
+                    if seg_key in results_by_id:
+                        # Already have this segment - add to its score
+                        results_by_id[seg_key]['score'] += keyword_weights.get(keyword, 1)
+                        results_by_id[seg_key]['matched_keywords'].add(keyword)
+                    else:
+                        # New segment
+                        results_by_id[seg_key] = {
+                            'video_id': str(transcript.video_id),
+                            'video_title': video_info.get('filename', 'Unknown'),
+                            'speaker': video_info.get('speaker', 'Unknown'),
+                            'event_name': video_info.get('event_name', 'Unknown'),
+                            'event_date': date_str,
+                            'year': video_info.get('year'),
+                            'start': start_time,
+                            'end': end_time,
+                            'text': combined_text,
+                            'segment_id': seg_key,
+                            'score': keyword_weights.get(keyword, 1),
+                            'matched_keywords': {keyword}
+                        }
+
+        # Sort results by score (highest first) - rare keyword matches come first
+        results = sorted(results_by_id.values(), key=lambda x: -x['score'])
+
+        # Log top results
+        print(f"[DEBUG] Total unique results: {len(results)}")
+        if results:
+            top = results[0]
+            print(f"[DEBUG] Top result (score={top['score']}, keywords={top['matched_keywords']}): {top['text'][:80]}...")
 
         # If no keyword matches, get a sample of transcripts (respecting year filter)
         if not results:
@@ -383,11 +507,15 @@ def search_transcripts_for_context(query: str, limit: int = 800):
             if len(unique_results) >= limit:
                 break
 
+    print(f"[DEBUG] Total unique results: {len(unique_results)}")
+    if unique_results:
+        print(f"[DEBUG] Sample result: {unique_results[0]['text'][:100]}...")
+
     return unique_results
 
 
 def validate_clips_against_database(clips: list) -> list:
-    """Validate that clips reference real videos and reasonable timestamps."""
+    """Validate that clips reference real videos AND that the text actually exists in transcripts."""
     validated = []
 
     with DatabaseSession() as db_session:
@@ -395,6 +523,7 @@ def validate_clips_against_database(clips: list) -> list:
             video_id = clip.get('video_id')
             start_time = clip.get('start_time', 0)
             end_time = clip.get('end_time', 0)
+            claimed_text = clip.get('text', '')
 
             # Check video exists
             try:
@@ -402,60 +531,140 @@ def validate_clips_against_database(clips: list) -> list:
             except:
                 video = None
 
-            if video:
-                # Find matching or nearby segments
-                transcript = db_session.query(Transcript).filter(
-                    Transcript.video_id == video.id,
-                    Transcript.status == 'completed'
-                ).first()
+            if not video:
+                # Skip clips with invalid video IDs entirely
+                continue
 
-                if transcript:
-                    # Get segments in the time range
-                    segments = db_session.query(TranscriptSegment).filter(
-                        TranscriptSegment.transcript_id == transcript.id,
-                        TranscriptSegment.start_time >= start_time - 2,
-                        TranscriptSegment.end_time <= end_time + 2
-                    ).order_by(TranscriptSegment.start_time).all()
+            # Find matching or nearby segments
+            transcript = db_session.query(Transcript).filter(
+                Transcript.video_id == video.id,
+                Transcript.status == 'completed'
+            ).first()
 
-                    if segments:
-                        # Combine segment texts for verification
-                        actual_text = ' '.join(s.text for s in segments)
-                        actual_start = float(segments[0].start_time)
-                        actual_end = float(segments[-1].end_time)
-                        event_date = video.event_date.strftime('%Y-%m-%d') if video.event_date else 'Unknown'
+            if not transcript:
+                continue
 
-                        validated.append({
-                            'video_id': str(video.id),
-                            'video_title': video.filename,
-                            'speaker': video.speaker or 'Unknown',
-                            'event_name': video.event_name or 'Unknown',
-                            'event_date': event_date,
-                            'start_time': actual_start,
-                            'end_time': actual_end,
-                            'duration': actual_end - actual_start,
-                            'text': actual_text,
-                            'verified': True,
-                            'original_text': clip.get('text', '')
-                        })
-                    else:
-                        # No matching segments, mark as unverified
-                        validated.append({
-                            **clip,
-                            'video_title': video.filename,
-                            'verified': False,
-                            'warning': 'Timestamps not found in transcript'
-                        })
+            # Search for the claimed text in the transcript
+            # Extract key phrase to search for - use multiple words for better matching
+            search_phrase = claimed_text[:100].strip().lower()
+            # Remove common starting words and punctuation
+            for prefix in ['"', "'", 'and ', 'but ', 'so ', 'the ', 'that ', 'we ', 'i ', 'you ']:
+                if search_phrase.startswith(prefix):
+                    search_phrase = search_phrase[len(prefix):]
+            # Extract meaningful words (skip first word if it's short)
+            words = search_phrase.split()
+            if len(words) > 3:
+                # Use 3-4 consecutive words for matching
+                search_phrase = ' '.join(words[1:4]) if len(words[0]) < 4 else ' '.join(words[:3])
             else:
+                search_phrase = ' '.join(words[:3])
+
+            # Search for this text in transcript segments
+            matching_segments = db_session.query(TranscriptSegment).filter(
+                TranscriptSegment.transcript_id == transcript.id,
+                TranscriptSegment.text.ilike(f'%{search_phrase}%')
+            ).order_by(TranscriptSegment.start_time).all()
+
+            if matching_segments:
+                # Found matching text - use the actual segment data
+                seg = matching_segments[0]
+
+                # Get surrounding segments for MORE complete context (30 seconds)
+                nearby = db_session.query(TranscriptSegment).filter(
+                    TranscriptSegment.transcript_id == transcript.id,
+                    TranscriptSegment.start_time >= float(seg.start_time) - 15,
+                    TranscriptSegment.end_time <= float(seg.end_time) + 15
+                ).order_by(TranscriptSegment.start_time).all()
+
+                actual_text = ' '.join(s.text for s in nearby)
+                actual_start = float(nearby[0].start_time)
+                actual_end = float(nearby[-1].end_time)
+                event_date = video.event_date.strftime('%Y-%m-%d') if video.event_date else 'Unknown'
+
                 validated.append({
-                    **clip,
-                    'verified': False,
-                    'warning': 'Video not found in database'
+                    'video_id': str(video.id),
+                    'video_title': video.filename,
+                    'speaker': video.speaker or 'Unknown',
+                    'event_name': video.event_name or 'Unknown',
+                    'event_date': event_date,
+                    'start_time': actual_start,
+                    'end_time': actual_end,
+                    'duration': actual_end - actual_start,
+                    'text': actual_text,
+                    'verified': True,
+                    'original_text': claimed_text
                 })
+            # If text not found, skip this clip entirely (it's hallucinated)
 
     return validated
 
 
-def generate_script_with_ai(user_message: str, transcript_context: list, conversation_history: list):
+def clean_clip_text(text: str) -> str:
+    """Clean clip text - minimal processing to preserve original content."""
+    text = text.strip()
+
+    if not text:
+        return "..."
+
+    # Just trim to reasonable length if too long
+    if len(text) > 500:
+        # Find a good stopping point
+        text = text[:500]
+        last_period = text.rfind('.')
+        if last_period > 200:
+            text = text[:last_period + 1]
+
+    return text
+
+
+def reconstruct_script_with_verified_clips(ai_response: str, verified_clips: list) -> str:
+    """Rebuild the script using verified clip texts so script matches actual clips."""
+
+    # Extract title from AI response
+    title_match = re.search(r'\*\*\[(.*?)\]\*\*', ai_response)
+    title = title_match.group(1) if title_match else "Video Script"
+
+    # Extract all RECORD sections (narration to record)
+    records = re.findall(r'\[RECORD:\s*(.*?)\]', ai_response)
+    # Also try old format
+    if not records:
+        records = re.findall(r'\[NARRATE:\s*(.*?)\]', ai_response)
+
+    # Build new script with verified clips
+    script = f"**[{title}]**\n\n"
+
+    record_idx = 0
+
+    # Add opening narration if exists
+    if records and record_idx < len(records):
+        script += f"[RECORD: {records[record_idx]}]\n\n"
+        record_idx += 1
+
+    # Add each verified clip with narration bridges
+    for i, clip in enumerate(verified_clips):
+        # Use the ACTUAL verified text from the database, cleaned up
+        raw_text = clip.get('text', '').strip()
+        clip_text = clean_clip_text(raw_text)
+
+        # Store the cleaned text back for display consistency
+        clip['display_text'] = clip_text
+
+        # Get speaker info if available
+        speaker = clip.get('speaker', '')
+        if speaker and speaker != 'Unknown':
+            script += f'[VIDEO: "{clip_text}" — {speaker}]\n\n'
+        else:
+            script += f'[VIDEO: "{clip_text}"]\n\n'
+
+        # Add transition narration if available
+        if record_idx < len(records):
+            script += f"[RECORD: {records[record_idx]}]\n\n"
+            record_idx += 1
+
+    return script
+
+
+def generate_script_with_ai(user_message: str, transcript_context: list, conversation_history: list, model: str = "gpt-4o"):
     """Generate a script using AI with verified transcript data."""
 
     # Build summary of available content
@@ -475,87 +684,107 @@ def generate_script_with_ai(user_message: str, transcript_context: list, convers
 - Total clips available: {len(transcript_context)}
 """
 
-    # Build context from transcripts with full metadata
-    context_text = ""
-    for t in transcript_context[:300]:  # Limit context size
-        context_text += f"[{t.get('event_date', 'Unknown')} | {t.get('event_name', 'Unknown')} | {t.get('speaker', 'Unknown')}]\n"
-        context_text += f"Video: {t['video_title']} | {t['start']:.1f}s-{t['end']:.1f}s | ID:{t['video_id']}\n"
-        context_text += f'"{t["text"]}"\n\n'
+    # Fetch good examples from database (few-shot learning)
+    examples_text = ""
+    try:
+        with DatabaseSession() as db_session:
+            good_scripts = db_session.query(ScriptFeedback).filter(
+                ScriptFeedback.rating == 1
+            ).order_by(ScriptFeedback.created_at.desc()).limit(2).all()
 
-    system_prompt = f"""You are a master video editor creating compelling short-form content. Your job: craft a NARRATIVE that flows naturally, using real clips AND suggested narration to bridge gaps.
+            if good_scripts:
+                examples_text = "\n\nHERE ARE EXAMPLES OF GOOD SCRIPTS (learn from this style):\n"
+                for i, ex in enumerate(good_scripts, 1):
+                    # Extract just the script part, not the JSON
+                    script_clean = ex.script.split('```json')[0].strip() if '```json' in ex.script else ex.script
+                    examples_text += f"\n--- EXAMPLE {i} ---\nUser asked: \"{ex.query}\"\nGood response:\n{script_clean[:1500]}...\n"
+    except Exception as e:
+        print(f"[DEBUG] Could not fetch examples: {e}")
+
+    # Build context from transcripts
+    # GPT-4o has 30k token limit, Claude has 200k - adjust accordingly
+    is_claude = model.startswith("claude")
+    max_segments = 300 if is_claude else 80  # Claude can handle more context
+    max_chars = 100000 if is_claude else 20000  # Rough char limits
+
+    context_text = ""
+    seen_passages = set()
+    total_chars = 0
+
+    for t in transcript_context[:max_segments]:
+        passage_key = (t['video_id'], round(t['start'], 0))
+        if passage_key in seen_passages:
+            continue
+        seen_passages.add(passage_key)
+
+        text = t["text"].strip()
+
+        # Only skip truly unusable segments (very short)
+        if len(text) < 15:
+            continue
+
+        # Check if we'd exceed character limit
+        entry = f"[{t.get('event_date', 'Unknown')} | {t.get('speaker', 'Unknown')}]\n"
+        entry += f"Video: {t['video_title']} | {t['start']:.1f}s-{t['end']:.1f}s | ID:{t['video_id']}\n"
+        entry += f'"{text}"\n\n'
+
+        if total_chars + len(entry) > max_chars:
+            break
+
+        context_text += entry
+        total_chars += len(entry)
+
+    system_prompt = f"""You are a video script creator. You have access to a database of transcript segments below.
 
 {summary}
 
-THE PROBLEM WITH RAW CLIPS:
-Raw transcript clips often don't flow together naturally. They start mid-sentence, lack context, or jump between unrelated ideas. Your job is to:
-1. Select the BEST, most powerful clips
-2. Add NARRATION suggestions to bridge them into a cohesive story
+IMPORTANT RULES:
+1. ALWAYS create a script using the transcript data provided below - NEVER say you don't have access or ask for more data
+2. Copy video_id and timestamps EXACTLY from the data below
+3. Look for COMPLETE THOUGHTS - prefer quotes that start with capital letters and end with periods
+4. If a segment starts mid-sentence (with "and", "but", lowercase), look for a better starting point nearby
 
-OUTPUT FORMAT - USE THIS EXACT STRUCTURE:
+CRITICAL - [RECORD] NARRATION STYLE:
+- Write ALL [RECORD] sections in FIRST PERSON as if the speaker (e.g. Dan Goldin) is narrating their own story
+- Use "I", "my", "we" - NOT "he", "his", "Goldin said"
+- Example BAD: "Dan Goldin developed a philosophy about caterpillars..."
+- Example GOOD: "I developed a philosophy about spotting caterpillars..."
+- The [RECORD] should sound like the speaker reflecting on their own experiences
 
----
-**[COMPELLING TITLE]**
+CRITICAL - SMOOTH TRANSITIONS:
+- Each [RECORD] must lead DIRECTLY into what the [VIDEO] clip will say
+- Read the FIRST WORDS of the video clip and make the [RECORD] set them up
+- Example: If video starts "The caterpillars are ugly..." then [RECORD] should end with something like "...and I learned to see their true nature:"
+- NEVER write a [RECORD] that has no connection to the video clip that follows
 
-[NARRATE: Opening hook that sets up the theme - 1-2 sentences]
+OUTPUT FORMAT:
 
-[CLIP 1: "Exact quote from the transcript data"]
+**[Title]**
 
-[NARRATE: Transition that connects clip 1 to clip 2]
+[RECORD: First-person opening - "I..." or "When I..."]
 
-[CLIP 2: "Exact quote from the transcript data"]
+[VIDEO: "Complete quote from transcript" | video_id | start-end]
 
-[NARRATE: Build toward the conclusion]
+[RECORD: First-person bridge that leads into next clip]
 
-[CLIP 3: "Powerful closing quote from data"]
+[VIDEO: "Complete quote from transcript" | video_id | start-end]
 
-[NARRATE: Optional closing thought]
----
+[RECORD: First-person closing reflection]
 
-RULES:
-1. [CLIP X] = EXACT text from transcript data below. Never paraphrase.
-2. [NARRATE] = Your suggested voiceover/narration to bridge clips. Keep it concise (1-2 sentences max).
-3. BE EXTREMELY SELECTIVE - only use clips that are:
-   - INSPIRING or QUOTABLE (something you'd put on a poster)
-   - COMPLETE sentences that stand alone
-   - EMOTIONALLY resonant, not just mentions of the topic
-4. REJECT clips that are: mundane, mid-sentence, overly specific/contextual, or awkward phrasing
-5. It's better to have 2-3 GREAT clips than 5 mediocre ones
-6. The narration should elevate and connect the clips into a compelling story
-
-WHAT MAKES A GREAT CLIP:
-- "We choose to go to the moon not because it is easy, but because it is hard" ✓ INSPIRING
-- "The leadership is still a key element of what, of the race" ✗ AWKWARD/INCOMPLETE
-- "I believe we must look to the stars" ✓ EVOCATIVE
-- "We're going to develop a process" ✗ MUNDANE/CONTEXTUAL
-
-EXAMPLE:
-
-**[The Future We Build]**
-
-[NARRATE: What does it take to shape tomorrow? The answer lies in how we lead today.]
-
-[CLIP 1: "True leadership means having the courage to make difficult decisions."]
-
-[NARRATE: But courage alone isn't enough. It requires vision.]
-
-[CLIP 2: "We must ask ourselves: what do we aspire to be as a nation, as a people?"]
-
-[NARRATE: And ultimately, it demands action.]
-
-[CLIP 3: "The future belongs to those who believe in the beauty of their dreams."]
-
-
-IMPORTANT: After the script, provide ONLY the JSON block with clip data. No explanations, no "Why this works", just the JSON:
+After script, provide JSON:
 ```json
-{{
-  "title": "...",
-  "clips": [
-    {{"video_id": "exact-uuid", "video_title": "...", "start_time": 10.0, "end_time": 22.0, "text": "exact text"}}
-  ]
-}}
+{{"title": "...", "clips": [{{"video_id": "ID", "video_title": "TITLE", "start_time": 0.0, "end_time": 0.0, "text": "TEXT"}}]}}
 ```
 
-AVAILABLE TRANSCRIPT CLIPS:
+FINDING GOOD CLIPS:
+- Look for segments that express complete ideas
+- Prefer quotes that would make sense to someone who hasn't seen the full video
+- If explaining a concept (like "frogs and caterpillars"), find the segments where it's DEFINED, not just mentioned
+- Combine multiple short segments if they form a complete thought
+{examples_text}
+---
+
+TRANSCRIPT DATA:
 """ + context_text
 
     # Build messages
@@ -568,15 +797,31 @@ AVAILABLE TRANSCRIPT CLIPS:
     messages.append({"role": "user", "content": user_message})
 
     try:
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000,
-        )
+        # Determine which provider to use
+        actual_model = MODEL_MAP.get(model, model)
+        is_claude = model.startswith("claude")
 
-        assistant_message = response.choices[0].message.content
+        if is_claude:
+            # Use Anthropic Claude
+            client = get_anthropic_client()
+            # Claude uses system prompt differently
+            response = client.messages.create(
+                model=actual_model,
+                max_tokens=4000,
+                system=system_prompt,
+                messages=[{"role": m["role"], "content": m["content"]} for m in messages[1:]]  # Skip system message
+            )
+            assistant_message = response.content[0].text
+        else:
+            # Use OpenAI
+            client = get_openai_client()
+            response = client.chat.completions.create(
+                model=actual_model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=2000,
+            )
+            assistant_message = response.choices[0].message.content
 
         # Try to extract JSON clips from response
         clips = []
@@ -594,8 +839,19 @@ AVAILABLE TRANSCRIPT CLIPS:
         else:
             validated_clips = []
 
+        # RECONSTRUCT the script using verified clip texts
+        # This ensures the displayed script matches the actual clips
+        if validated_clips:
+            reconstructed = reconstruct_script_with_verified_clips(assistant_message, validated_clips)
+            # Update clip texts to match what's shown in the script
+            for clip in validated_clips:
+                if 'display_text' in clip:
+                    clip['text'] = clip['display_text']
+        else:
+            reconstructed = assistant_message
+
         return {
-            "message": assistant_message,
+            "message": reconstructed,
             "clips": validated_clips,
             "has_script": len(validated_clips) > 0
         }
@@ -612,7 +868,642 @@ AVAILABLE TRANSCRIPT CLIPS:
 @app.route('/chat')
 def chat():
     """Chat interface for script generation."""
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     return render_template('chat.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login page."""
+    if request.method == 'POST':
+        data = request.form
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+
+        if not email or not password:
+            return render_template('login.html', error='Email and password required')
+
+        with DatabaseSession() as db_session:
+            user = db_session.query(User).filter(User.email == email).first()
+            if not user:
+                return render_template('login.html', error='Invalid email or password')
+
+            # Check password
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            if user.password_hash != password_hash:
+                return render_template('login.html', error='Invalid email or password')
+
+            if not user.is_active:
+                return render_template('login.html', error='Account is disabled')
+
+            # Update last login
+            user.last_login = datetime.utcnow()
+            db_session.commit()
+
+            # Set session
+            session['user_id'] = str(user.id)
+            session['user_name'] = user.name
+            session['user_email'] = user.email
+
+            return redirect(url_for('chat'))
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """User logout."""
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration page."""
+    if request.method == 'POST':
+        data = request.form
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        confirm = data.get('confirm', '')
+
+        if not name or not email or not password:
+            return render_template('register.html', error='All fields are required')
+
+        if password != confirm:
+            return render_template('register.html', error='Passwords do not match')
+
+        if len(password) < 6:
+            return render_template('register.html', error='Password must be at least 6 characters')
+
+        with DatabaseSession() as db_session:
+            # Check if email exists
+            existing = db_session.query(User).filter(User.email == email).first()
+            if existing:
+                return render_template('register.html', error='Email already registered')
+
+            # Create user
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            user = User(
+                name=name,
+                email=email,
+                password_hash=password_hash
+            )
+            db_session.add(user)
+            db_session.commit()
+
+            # Auto-login
+            session['user_id'] = str(user.id)
+            session['user_name'] = user.name
+            session['user_email'] = user.email
+
+            return redirect(url_for('chat'))
+
+    return render_template('register.html')
+
+
+# ============================================================================
+# CONVERSATION API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/conversations', methods=['GET'])
+def api_list_conversations():
+    """List all conversations for the current user."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    with DatabaseSession() as db_session:
+        conversations = db_session.query(Conversation).filter(
+            Conversation.user_id == UUID(session['user_id'])
+        ).order_by(Conversation.updated_at.desc()).all()
+
+        return jsonify({
+            'conversations': [{
+                'id': str(c.id),
+                'title': c.title,
+                'video_id': str(c.video_id) if c.video_id else None,
+                'created_at': c.created_at.isoformat(),
+                'updated_at': c.updated_at.isoformat(),
+                'message_count': len(c.messages)
+            } for c in conversations]
+        })
+
+
+@app.route('/api/conversations', methods=['POST'])
+def api_create_conversation():
+    """Create a new conversation."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    data = request.json or {}
+    title = data.get('title', 'New Chat')
+    video_id = data.get('video_id')
+
+    with DatabaseSession() as db_session:
+        conversation = Conversation(
+            user_id=UUID(session['user_id']),
+            title=title,
+            video_id=UUID(video_id) if video_id else None
+        )
+        db_session.add(conversation)
+        db_session.commit()
+
+        return jsonify({
+            'id': str(conversation.id),
+            'title': conversation.title,
+            'created_at': conversation.created_at.isoformat()
+        })
+
+
+@app.route('/api/conversations/<conversation_id>', methods=['GET'])
+def api_get_conversation(conversation_id):
+    """Get a conversation with all messages."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    with DatabaseSession() as db_session:
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        return jsonify({
+            'id': str(conversation.id),
+            'title': conversation.title,
+            'video_id': str(conversation.video_id) if conversation.video_id else None,
+            'created_at': conversation.created_at.isoformat(),
+            'updated_at': conversation.updated_at.isoformat(),
+            'messages': [{
+                'id': str(m.id),
+                'role': m.role,
+                'content': m.content,
+                'clips': m.clips_json or [],
+                'model': m.model,
+                'created_at': m.created_at.isoformat()
+            } for m in conversation.messages]
+        })
+
+
+@app.route('/api/conversations/<conversation_id>', methods=['PUT'])
+def api_update_conversation(conversation_id):
+    """Update conversation title."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    data = request.json or {}
+
+    with DatabaseSession() as db_session:
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        if 'title' in data:
+            conversation.title = data['title']
+
+        db_session.commit()
+
+        return jsonify({'success': True})
+
+
+@app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
+def api_delete_conversation(conversation_id):
+    """Delete a conversation."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    with DatabaseSession() as db_session:
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        db_session.delete(conversation)
+        db_session.commit()
+
+        return jsonify({'success': True})
+
+
+# ============================================================================
+# COLLABORATION API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/users/search', methods=['GET'])
+def api_search_users():
+    """Search users by name or email for inviting to conversations."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    query = request.args.get('q', '').strip()
+    if len(query) < 2:
+        return jsonify({'users': []})
+
+    with DatabaseSession() as db_session:
+        users = db_session.query(User).filter(
+            User.is_active == 1,
+            User.id != UUID(session['user_id']),
+            (User.name.ilike(f'%{query}%') | User.email.ilike(f'%{query}%'))
+        ).limit(10).all()
+
+        return jsonify({
+            'users': [{
+                'id': str(u.id),
+                'name': u.name,
+                'email': u.email
+            } for u in users]
+        })
+
+
+@app.route('/api/conversations/<conversation_id>/participants', methods=['GET'])
+def api_get_participants(conversation_id):
+    """Get participants of a conversation."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ChatParticipant
+
+    with DatabaseSession() as db_session:
+        # Check access
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id)
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        # Owner always has access
+        is_owner = str(conversation.user_id) == session['user_id']
+        is_participant = db_session.query(ChatParticipant).filter(
+            ChatParticipant.conversation_id == UUID(conversation_id),
+            ChatParticipant.user_id == UUID(session['user_id'])
+        ).first() is not None
+
+        if not is_owner and not is_participant:
+            return jsonify({'error': 'Access denied'}), 403
+
+        # Get owner
+        owner = db_session.query(User).filter(User.id == conversation.user_id).first()
+
+        # Get participants
+        participants = db_session.query(ChatParticipant).filter(
+            ChatParticipant.conversation_id == UUID(conversation_id)
+        ).all()
+
+        result = [{
+            'id': str(owner.id) if owner else None,
+            'name': owner.name if owner else 'Unknown',
+            'email': owner.email if owner else '',
+            'role': 'owner'
+        }]
+
+        for p in participants:
+            user = db_session.query(User).filter(User.id == p.user_id).first()
+            if user:
+                result.append({
+                    'id': str(user.id),
+                    'name': user.name,
+                    'email': user.email,
+                    'role': p.role,
+                    'joined_at': p.joined_at.isoformat() if p.joined_at else None
+                })
+
+        return jsonify({'participants': result, 'is_collaborative': conversation.is_collaborative})
+
+
+@app.route('/api/conversations/<conversation_id>/invite', methods=['POST'])
+def api_invite_participant(conversation_id):
+    """Invite a user to collaborate on a conversation."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ChatParticipant
+
+    data = request.json or {}
+    user_id = data.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID required'}), 400
+
+    with DatabaseSession() as db_session:
+        # Check ownership
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found or access denied'}), 404
+
+        # Check user exists
+        invitee = db_session.query(User).filter(User.id == UUID(user_id)).first()
+        if not invitee:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Check not already participant
+        existing = db_session.query(ChatParticipant).filter(
+            ChatParticipant.conversation_id == UUID(conversation_id),
+            ChatParticipant.user_id == UUID(user_id)
+        ).first()
+
+        if existing:
+            return jsonify({'error': 'User already a participant'}), 400
+
+        # Add participant
+        participant = ChatParticipant(
+            conversation_id=UUID(conversation_id),
+            user_id=UUID(user_id),
+            role='member',
+            invited_by=UUID(session['user_id'])
+        )
+        db_session.add(participant)
+
+        # Mark conversation as collaborative
+        conversation.is_collaborative = 1
+
+        db_session.commit()
+
+        return jsonify({
+            'success': True,
+            'participant': {
+                'id': str(invitee.id),
+                'name': invitee.name,
+                'email': invitee.email,
+                'role': 'member'
+            }
+        })
+
+
+@app.route('/api/conversations/<conversation_id>/leave', methods=['POST'])
+def api_leave_conversation(conversation_id):
+    """Leave a conversation (for participants, not owners)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ChatParticipant
+
+    with DatabaseSession() as db_session:
+        participant = db_session.query(ChatParticipant).filter(
+            ChatParticipant.conversation_id == UUID(conversation_id),
+            ChatParticipant.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not participant:
+            return jsonify({'error': 'Not a participant'}), 404
+
+        db_session.delete(participant)
+        db_session.commit()
+
+        return jsonify({'success': True})
+
+
+@app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['GET'])
+def api_get_clip_comments(conversation_id, clip_index):
+    """Get comments on a specific clip."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ClipComment
+
+    with DatabaseSession() as db_session:
+        comments = db_session.query(ClipComment).filter(
+            ClipComment.conversation_id == UUID(conversation_id),
+            ClipComment.clip_index == clip_index
+        ).order_by(ClipComment.created_at).all()
+
+        return jsonify({
+            'comments': [{
+                'id': str(c.id),
+                'user_id': str(c.user_id),
+                'user_name': db_session.query(User).filter(User.id == c.user_id).first().name if c.user_id else 'Unknown',
+                'content': c.content,
+                'mentions': c.mentions or [],
+                'is_regenerate_request': c.is_regenerate_request,
+                'created_at': c.created_at.isoformat()
+            } for c in comments]
+        })
+
+
+@app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['POST'])
+def api_add_clip_comment(conversation_id, clip_index):
+    """Add a comment on a clip. Use @mv-video to request regeneration."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ClipComment
+
+    data = request.json or {}
+    content = data.get('content', '').strip()
+    message_id = data.get('message_id')
+
+    if not content:
+        return jsonify({'error': 'Comment content required'}), 400
+
+    # Parse mentions from content
+    mentions = re.findall(r'@(\w+(?:-\w+)*)', content)
+    is_regenerate = 'mv-video' in mentions or 'mv_video' in mentions
+
+    with DatabaseSession() as db_session:
+        comment = ClipComment(
+            conversation_id=UUID(conversation_id),
+            message_id=UUID(message_id) if message_id else None,
+            user_id=UUID(session['user_id']),
+            clip_index=clip_index,
+            content=content,
+            mentions=mentions,
+            is_regenerate_request=1 if is_regenerate else 0
+        )
+        db_session.add(comment)
+        db_session.commit()
+
+        user = db_session.query(User).filter(User.id == UUID(session['user_id'])).first()
+
+        return jsonify({
+            'success': True,
+            'comment': {
+                'id': str(comment.id),
+                'user_id': str(comment.user_id),
+                'user_name': user.name if user else 'Unknown',
+                'content': comment.content,
+                'mentions': mentions,
+                'is_regenerate_request': is_regenerate,
+                'created_at': comment.created_at.isoformat()
+            }
+        })
+
+
+@app.route('/api/clips/<conversation_id>/<int:clip_index>/regenerate', methods=['POST'])
+def api_regenerate_clip(conversation_id, clip_index):
+    """Regenerate a specific clip based on feedback."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    data = request.json or {}
+    feedback = data.get('feedback', '').strip()
+    original_clip = data.get('original_clip', {})
+    conversation_history = data.get('history', [])
+    model = data.get('model', 'claude-sonnet')
+
+    if not original_clip:
+        return jsonify({'error': 'Original clip data required'}), 400
+
+    # Build prompt for regeneration
+    regenerate_prompt = f"""The user wants to find a DIFFERENT clip to replace this one.
+
+ORIGINAL CLIP (to replace):
+- Video: {original_clip.get('video_title', 'Unknown')}
+- Time: {original_clip.get('start_time', 0):.1f}s - {original_clip.get('end_time', 0):.1f}s
+- Text: "{original_clip.get('text', '')}"
+
+USER FEEDBACK: {feedback if feedback else 'Find a better alternative'}
+
+Find ONE alternative clip that:
+1. Covers a similar topic/theme but with different content
+2. Is from a DIFFERENT part of the video OR a different video entirely
+3. Better matches what the user is looking for
+
+Output format:
+```json
+{{"clips": [{{"video_id": "...", "video_title": "...", "start_time": 0.0, "end_time": 0.0, "text": "..."}}]}}
+```"""
+
+    # Search for relevant context
+    context = search_transcripts_for_context(feedback or original_clip.get('text', '')[:100])
+
+    if not context:
+        return jsonify({'error': 'No relevant content found'}), 404
+
+    # Generate with AI
+    result = generate_script_with_ai(regenerate_prompt, context, conversation_history, model=model)
+
+    if result.get('clips'):
+        return jsonify({
+            'success': True,
+            'alternative_clips': result['clips'],
+            'message': result.get('message', '')
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'Could not find alternative clips',
+            'message': result.get('message', '')
+        })
+
+
+@app.route('/api/records/<conversation_id>/<int:record_index>/comments', methods=['POST'])
+def api_add_record_comment(conversation_id, record_index):
+    """Add a comment on a record/narration section. Use @mv-video to request regeneration."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    from scripts.db import ClipComment
+
+    data = request.json or {}
+    content = data.get('content', '').strip()
+
+    if not content:
+        return jsonify({'error': 'Comment content required'}), 400
+
+    # Parse mentions from content
+    mentions = re.findall(r'@(\w+(?:-\w+)*)', content)
+    is_regenerate = 'mv-video' in mentions or 'mv_video' in mentions
+
+    with DatabaseSession() as db_session:
+        # Reuse ClipComment table with negative index to indicate record sections
+        comment = ClipComment(
+            conversation_id=UUID(conversation_id),
+            user_id=UUID(session['user_id']),
+            clip_index=-1 - record_index,  # Use negative indices for records
+            content=content,
+            mentions=mentions,
+            is_regenerate_request=1 if is_regenerate else 0
+        )
+        db_session.add(comment)
+        db_session.commit()
+
+        user = db_session.query(User).filter(User.id == UUID(session['user_id'])).first()
+
+        return jsonify({
+            'success': True,
+            'comment': {
+                'id': str(comment.id),
+                'user_id': str(comment.user_id),
+                'user_name': user.name if user else 'Unknown',
+                'content': comment.content,
+                'mentions': mentions,
+                'is_regenerate_request': is_regenerate,
+                'created_at': comment.created_at.isoformat()
+            }
+        })
+
+
+@app.route('/api/records/<conversation_id>/<int:record_index>/regenerate', methods=['POST'])
+def api_regenerate_record(conversation_id, record_index):
+    """Regenerate a narration/record section based on feedback."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    data = request.json or {}
+    feedback = data.get('feedback', '').strip()
+    original_text = data.get('original_text', '').strip()
+    conversation_history = data.get('history', [])
+    model = data.get('model', 'claude-sonnet')
+
+    if not original_text:
+        return jsonify({'error': 'Original text required'}), 400
+
+    # Build prompt for regeneration
+    regenerate_prompt = f"""The user wants to regenerate this narration/voiceover text.
+
+ORIGINAL NARRATION (to rewrite):
+"{original_text}"
+
+USER FEEDBACK: {feedback if feedback else 'Provide an alternative version'}
+
+Write ONE alternative narration that:
+1. Conveys a similar message but with different wording
+2. Maintains a professional, engaging tone suitable for voiceover
+3. Is approximately the same length as the original
+4. Better matches what the user is looking for based on their feedback
+
+Output ONLY the new narration text, nothing else. Do not include quotes or any other formatting."""
+
+    # Generate with AI
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[
+                {"role": "user", "content": regenerate_prompt}
+            ]
+        )
+
+        new_text = response.content[0].text.strip()
+        # Remove any quotes that might have been added
+        new_text = new_text.strip('"\'')
+
+        return jsonify({
+            'success': True,
+            'new_text': new_text
+        })
+    except Exception as e:
+        print(f"Error regenerating record: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 
 @app.route('/api/chat', methods=['POST'])
@@ -622,6 +1513,8 @@ def api_chat():
         data = request.json
         user_message = data.get('message', '').strip()
         conversation_history = data.get('history', [])
+        conversation_id = data.get('conversation_id')
+        model = data.get('model', 'gpt-4o')  # Default to GPT-4o
 
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
@@ -630,21 +1523,85 @@ def api_chat():
         context = search_transcripts_for_context(user_message)
 
         if not context:
+            response_text = "I couldn't find any matching content in the video library. Try different keywords or check the Transcripts page to see what's available."
+
+            # Save messages if conversation exists
+            if conversation_id and 'user_id' in session:
+                with DatabaseSession() as db_session:
+                    # Save user message
+                    user_msg = ChatMessage(
+                        conversation_id=UUID(conversation_id),
+                        role='user',
+                        content=user_message
+                    )
+                    db_session.add(user_msg)
+
+                    # Save assistant response
+                    assistant_msg = ChatMessage(
+                        conversation_id=UUID(conversation_id),
+                        role='assistant',
+                        content=response_text,
+                        model=model
+                    )
+                    db_session.add(assistant_msg)
+
+                    # Update conversation timestamp
+                    conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
+                    if conv:
+                        conv.updated_at = datetime.utcnow()
+
+                    db_session.commit()
+
             return jsonify({
-                'response': "I couldn't find any matching content in the video library. Try different keywords or check the Transcripts page to see what's available.",
+                'response': response_text,
                 'clips': [],
                 'has_script': False,
-                'context_segments': 0
+                'context_segments': 0,
+                'model': model,
+                'conversation_id': conversation_id
             })
 
         # Generate response with AI
-        result = generate_script_with_ai(user_message, context, conversation_history)
+        result = generate_script_with_ai(user_message, context, conversation_history, model=model)
+
+        # Save messages to conversation
+        if conversation_id and 'user_id' in session:
+            with DatabaseSession() as db_session:
+                # Save user message
+                user_msg = ChatMessage(
+                    conversation_id=UUID(conversation_id),
+                    role='user',
+                    content=user_message
+                )
+                db_session.add(user_msg)
+
+                # Save assistant response with clips
+                assistant_msg = ChatMessage(
+                    conversation_id=UUID(conversation_id),
+                    role='assistant',
+                    content=result['message'],
+                    clips_json=result.get('clips', []),
+                    model=model
+                )
+                db_session.add(assistant_msg)
+
+                # Update conversation timestamp and title if it's the first message
+                conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
+                if conv:
+                    conv.updated_at = datetime.utcnow()
+                    # Auto-title based on first user message if still default
+                    if conv.title == 'New Chat':
+                        conv.title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+
+                db_session.commit()
 
         return jsonify({
             'response': result['message'],
             'clips': result.get('clips', []),
             'has_script': result.get('has_script', False),
-            'context_segments': len(context)
+            'context_segments': len(context),
+            'model': model,
+            'conversation_id': conversation_id
         })
 
     except Exception as e:
@@ -656,6 +1613,98 @@ def api_chat():
             'clips': [],
             'has_script': False
         }), 500
+
+
+@app.route('/api/script-feedback', methods=['POST'])
+def api_script_feedback():
+    """Save user feedback on a generated script."""
+    try:
+        data = request.json
+        query = data.get('query', '')
+        script = data.get('script', '')
+        clips = data.get('clips', [])
+        rating = data.get('rating', 0)  # 1 = good, -1 = bad
+        model = data.get('model', 'unknown')
+
+        if not script or rating == 0:
+            return jsonify({'error': 'Script and rating required'}), 400
+
+        with DatabaseSession() as db_session:
+            feedback = ScriptFeedback(
+                query=query,
+                script=script,
+                clips_json=clips,
+                rating=rating,
+                model=model
+            )
+            db_session.add(feedback)
+            db_session.commit()
+
+            return jsonify({
+                'success': True,
+                'id': str(feedback.id),
+                'message': 'Thanks! This helps improve future scripts.'
+            })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/script-examples', methods=['GET'])
+def api_script_examples():
+    """Get good script examples for few-shot learning."""
+    try:
+        with DatabaseSession() as db_session:
+            # Get top-rated scripts (rating = 1)
+            examples = db_session.query(ScriptFeedback).filter(
+                ScriptFeedback.rating == 1
+            ).order_by(ScriptFeedback.created_at.desc()).limit(5).all()
+
+            return jsonify({
+                'examples': [{
+                    'id': str(e.id),
+                    'query': e.query,
+                    'script': e.script,
+                    'clips': e.clips_json,
+                    'model': e.model
+                } for e in examples]
+            })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video-preview/<video_id>')
+def api_video_preview(video_id):
+    """Get presigned S3 URL for video preview."""
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            if not video.s3_key:
+                return jsonify({'error': 'Video not in S3'}), 404
+
+            # Generate presigned URL (valid for 1 hour)
+            config = get_config()
+            bucket = config.settings.get("aws", {}).get("s3_bucket", "per-aspera-brain")
+
+            s3_client = get_s3_client()
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket, 'Key': video.s3_key},
+                ExpiresIn=3600  # 1 hour
+            )
+
+            return jsonify({
+                'url': presigned_url,
+                'video_id': str(video.id),
+                'filename': video.filename,
+                'duration': video.duration_seconds
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/chat/create-video', methods=['POST'])
@@ -699,6 +1748,635 @@ def api_create_video_from_chat():
         'script_path': str(output_dir / 'EDIT_SCRIPT.txt'),
         'total_duration': total_duration
     })
+
+
+@app.route('/api/chat/export-script', methods=['POST'])
+def api_export_script():
+    """Generate a downloadable script file."""
+    from flask import Response
+
+    data = request.json
+    clips = data.get('clips', [])
+    title = data.get('title', 'Video Script')
+    script_text = data.get('script_text', '')
+
+    if not clips:
+        return jsonify({'error': 'No clips provided'}), 400
+
+    # Generate edit script content
+    content = f"# {title}\n"
+    content += f"# Generated from MV Videos\n"
+    content += f"# Total clips: {len(clips)}\n"
+    content += "=" * 50 + "\n\n"
+
+    if script_text:
+        # Clean up the script text - remove JSON blocks
+        clean_script = re.sub(r'```json[\s\S]*?```', '', script_text)
+        clean_script = re.sub(r'---', '', clean_script)
+        content += "SCRIPT:\n\n"
+        content += clean_script.strip()
+        content += "\n\n" + "=" * 50 + "\n\n"
+
+    content += "CLIP DETAILS:\n\n"
+    total_duration = 0
+    for i, clip in enumerate(clips, 1):
+        duration = clip.get('duration', clip.get('end_time', 0) - clip.get('start_time', 0))
+        total_duration += duration
+        content += f"--- Clip {i} ---\n"
+        content += f"Source: {clip.get('video_title', 'Unknown')}\n"
+        content += f"Speaker: {clip.get('speaker', 'Unknown')}\n"
+        content += f"Time: {clip.get('start_time', 0):.1f}s - {clip.get('end_time', 0):.1f}s ({duration:.1f}s)\n"
+        content += f"Text: \"{clip.get('text', '')}\"\n"
+        content += f"Video ID: {clip.get('video_id', 'Unknown')}\n"
+        content += f"Verified: {'Yes' if clip.get('verified') else 'No'}\n\n"
+
+    content += "=" * 50 + "\n"
+    content += f"Total Duration: {total_duration:.1f}s\n"
+
+    # Create filename
+    safe_title = re.sub(r'[^\w\-_ ]', '_', title)
+    filename = f"{safe_title}_script.txt"
+
+    return Response(
+        content,
+        mimetype='text/plain',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@app.route('/api/video-thumbnail/<video_id>')
+def api_video_thumbnail(video_id):
+    """Return pre-generated thumbnail from S3 (fast) or redirect to placeholder."""
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return '', 404
+
+            config = get_config()
+            bucket = config.settings.get("aws", {}).get("s3_bucket", "per-aspera-brain")
+            s3_client = get_s3_client()
+
+            # If we have a pre-generated thumbnail, return presigned URL redirect
+            if video.thumbnail_s3_key:
+                presigned_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket, 'Key': video.thumbnail_s3_key},
+                    ExpiresIn=3600
+                )
+                return redirect(presigned_url)
+
+            # No pre-generated thumbnail - return 404 (placeholder will show)
+            return '', 404
+
+    except Exception as e:
+        print(f"[THUMB] Error: {e}")
+        return '', 404
+
+
+@app.route('/api/clip-preview/<video_id>')
+def api_clip_preview(video_id):
+    """Return presigned URL for streaming preview - fast and reliable."""
+    start_time = request.args.get('start', type=float, default=0)
+    end_time = request.args.get('end', type=float, default=30)
+
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            if not video.s3_key:
+                return jsonify({'error': 'Video not in S3'}), 404
+
+            config = get_config()
+            bucket = config.settings.get("aws", {}).get("s3_bucket", "per-aspera-brain")
+            s3_client = get_s3_client()
+
+            # Generate presigned URL for streaming - browser will handle seeking
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket, 'Key': video.s3_key},
+                ExpiresIn=3600
+            )
+
+            return jsonify({
+                'url': presigned_url,
+                'start': start_time,
+                'end': end_time,
+                'title': video.filename or video.original_filename
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/clip-download/<video_id>')
+def api_clip_download(video_id):
+    """Download a clip at original quality."""
+    import subprocess
+    import shutil
+
+    start_time = request.args.get('start', type=float, default=0)
+    end_time = request.args.get('end', type=float, default=30)
+    duration = end_time - start_time
+
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            if not video.s3_key:
+                return jsonify({'error': 'Video not in S3'}), 404
+
+            config = get_config()
+            bucket = config.settings.get("aws", {}).get("s3_bucket", "per-aspera-brain")
+            s3_client = get_s3_client()
+
+            # Use home directory for cache (more space than /tmp)
+            cache_base = Path('/home/ec2-user/video_cache')
+            cache_base.mkdir(exist_ok=True)
+
+            # Download video to local cache first (ffmpeg crashes with S3 URLs)
+            videos_cache = cache_base / 'videos'
+            videos_cache.mkdir(exist_ok=True)
+            cached_video = videos_cache / f"{video_id}.mp4"
+
+            # Download if not cached or file is too small (incomplete download)
+            if not cached_video.exists() or cached_video.stat().st_size < 1000:
+                print(f"[DOWNLOAD] Downloading video {video_id}...")
+                import urllib.request
+                presigned_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket, 'Key': video.s3_key},
+                    ExpiresIn=3600
+                )
+                urllib.request.urlretrieve(presigned_url, str(cached_video))
+                print(f"[DOWNLOAD] Downloaded {cached_video.stat().st_size} bytes")
+
+            # Output clips directory
+            clips_dir = cache_base / 'clips'
+            clips_dir.mkdir(exist_ok=True)
+
+            # Create output file
+            safe_name = re.sub(r'[^\w\-_ ]', '_', video.filename or 'clip')
+            safe_name = safe_name.replace('.mp4', '')
+            filename = f"{safe_name}_{start_time:.0f}s-{end_time:.0f}s.mp4"
+            output_path = clips_dir / f"{video_id}_{start_time:.0f}_{end_time:.0f}.mp4"
+
+            # Clean up old clips to save space (keep only last 50)
+            try:
+                existing_clips = sorted(clips_dir.glob('*.mp4'), key=lambda x: x.stat().st_mtime)
+                if len(existing_clips) > 50:
+                    for old_clip in existing_clips[:-50]:
+                        old_clip.unlink()
+            except:
+                pass
+
+            ffmpeg_path = shutil.which('ffmpeg') or '/usr/local/bin/ffmpeg'
+
+            # Extract clip from local file with QuickTime-compatible encoding
+            print(f"[DOWNLOAD] Extracting clip from {start_time}s to {end_time}s")
+            cmd = [
+                ffmpeg_path, '-y',
+                '-ss', str(start_time),
+                '-i', str(cached_video),
+                '-t', str(duration),
+                '-c:v', 'libx264',
+                '-profile:v', 'high',      # High profile for quality
+                '-level', '4.0',            # Level 4.0 for broad compatibility
+                '-pix_fmt', 'yuv420p',      # Required for QuickTime
+                '-preset', 'fast',
+                '-crf', '18',               # High quality
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-ar', '48000',             # Standard audio sample rate
+                '-movflags', '+faststart',  # Enable streaming
+                str(output_path)
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+            if result.returncode != 0:
+                error_msg = result.stderr.decode()[:500]
+                print(f"[DOWNLOAD] Encoding failed: {error_msg}")
+                return jsonify({'error': 'Failed to extract clip', 'details': error_msg}), 500
+
+            if not output_path.exists() or output_path.stat().st_size == 0:
+                return jsonify({'error': 'Output file is empty or missing'}), 500
+
+            print(f"[DOWNLOAD] Success: {output_path} ({output_path.stat().st_size} bytes)")
+
+            return send_file(
+                str(output_path),
+                mimetype='video/mp4',
+                as_attachment=True,
+                download_name=filename
+            )
+
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Download timed out - clip may be too long'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video-download/<video_id>')
+def api_video_download(video_id):
+    """Download the full video."""
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            if not video.s3_key:
+                return jsonify({'error': 'Video not in S3'}), 404
+
+            config = get_config()
+            bucket = config.settings.get("aws", {}).get("s3_bucket", "per-aspera-brain")
+            s3_client = get_s3_client()
+
+            # Generate presigned URL for direct download
+            url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': bucket,
+                    'Key': video.s3_key,
+                    'ResponseContentDisposition': f'attachment; filename="{video.filename}"'
+                },
+                ExpiresIn=3600
+            )
+
+            return redirect(url)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/transcript-segment/update', methods=['POST'])
+def api_update_transcript_segment():
+    """Update transcript text for a specific segment by time range."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        video_id = data.get('video_id')
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        new_text = data.get('text')
+
+        if not all([video_id, start_time is not None, end_time is not None, new_text]):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        with DatabaseSession() as db_session:
+            # Find transcript for this video
+            from scripts.db import Transcript, TranscriptSegment
+            transcript = db_session.query(Transcript).filter(
+                Transcript.video_id == UUID(video_id)
+            ).first()
+
+            if not transcript:
+                return jsonify({'error': 'Transcript not found'}), 404
+
+            # Find segments that overlap with the given time range
+            segments = db_session.query(TranscriptSegment).filter(
+                TranscriptSegment.transcript_id == transcript.id,
+                TranscriptSegment.start_time >= float(start_time) - 0.5,
+                TranscriptSegment.end_time <= float(end_time) + 0.5
+            ).order_by(TranscriptSegment.start_time).all()
+
+            if not segments:
+                # Try a broader search
+                segments = db_session.query(TranscriptSegment).filter(
+                    TranscriptSegment.transcript_id == transcript.id,
+                    TranscriptSegment.start_time >= float(start_time) - 2,
+                    TranscriptSegment.start_time <= float(end_time) + 2
+                ).order_by(TranscriptSegment.start_time).all()
+
+            if not segments:
+                return jsonify({'error': 'No matching segments found'}), 404
+
+            # Update the first segment with the new text
+            # (In a more sophisticated system, you might want to handle multiple segments)
+            segments[0].text = new_text.strip()
+            db_session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': f'Updated {len(segments)} segment(s)',
+                'segment_id': str(segments[0].id)
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/transcripts/<transcript_id>/identify-speakers', methods=['POST'])
+def api_identify_speakers(transcript_id):
+    """Use AI to identify and label speakers in a transcript."""
+    try:
+        data = request.json or {}
+        known_speakers = data.get('known_speakers', [])  # List of known speaker names
+
+        with DatabaseSession() as db_session:
+            transcript = db_session.query(Transcript).filter(
+                Transcript.id == UUID(transcript_id)
+            ).first()
+
+            if not transcript:
+                return jsonify({'error': 'Transcript not found'}), 404
+
+            # Get video info
+            video = db_session.query(Video).filter(Video.id == transcript.video_id).first()
+            video_speaker = video.speaker if video else None
+
+            # Get segments
+            segments = db_session.query(TranscriptSegment).filter(
+                TranscriptSegment.transcript_id == transcript.id
+            ).order_by(TranscriptSegment.start_time).limit(100).all()
+
+            if not segments:
+                return jsonify({'error': 'No segments found'}), 404
+
+            # Build transcript with timestamps
+            transcript_text = ""
+            for i, seg in enumerate(segments):
+                mins = int(seg.start_time // 60)
+                secs = int(seg.start_time % 60)
+                transcript_text += f"[{mins}:{secs:02d}] {seg.text}\n"
+
+            # Add known speaker context
+            speaker_context = ""
+            if video_speaker:
+                speaker_context = f"The main speaker is: {video_speaker}\n"
+            if known_speakers:
+                speaker_context += f"Other known speakers: {', '.join(known_speakers)}\n"
+
+            # Use Claude to identify speakers
+            client = get_anthropic_client()
+
+            prompt = f"""Analyze this transcript and identify different speakers. Look for:
+- Changes in speaking style or tone
+- Questions followed by answers
+- Introductions or speaker identifications
+- Different perspectives or topics
+
+{speaker_context}
+
+TRANSCRIPT:
+{transcript_text[:8000]}
+
+For each distinct voice/speaker you identify, provide:
+1. A label (use actual name if mentioned, otherwise "Speaker 1", "Speaker 2", etc.)
+2. Time ranges where they speak (approximate)
+3. Key characteristics that helped identify them
+
+Respond in JSON format:
+{{
+  "speakers": [
+    {{
+      "label": "Speaker Name or Speaker 1",
+      "time_ranges": ["0:00-1:30", "3:45-5:00"],
+      "characteristics": "Main presenter, discusses NASA"
+    }}
+  ],
+  "speaker_changes": [
+    {{"time": "0:00", "speaker": "Speaker 1"}},
+    {{"time": "1:30", "speaker": "Speaker 2"}}
+  ]
+}}"""
+
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = response.content[0].text
+
+            # Parse JSON from response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                result = {"speakers": [], "speaker_changes": []}
+
+            return jsonify({
+                'success': True,
+                'speakers': result.get('speakers', []),
+                'speaker_changes': result.get('speaker_changes', [])
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/segments/<segment_id>/speaker', methods=['PUT'])
+def api_update_segment_speaker(segment_id):
+    """Update speaker label for a segment."""
+    try:
+        data = request.json
+        speaker = data.get('speaker', '').strip()
+
+        with DatabaseSession() as db_session:
+            segment = db_session.query(TranscriptSegment).filter(
+                TranscriptSegment.id == UUID(segment_id)
+            ).first()
+
+            if not segment:
+                return jsonify({'error': 'Segment not found'}), 404
+
+            segment.speaker = speaker if speaker else None
+            db_session.commit()
+
+            return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/videos/<video_id>/autofill', methods=['POST'])
+def api_autofill_video(video_id):
+    """Use AI to auto-fill video metadata from transcript."""
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            # Get transcript
+            transcript = db_session.query(Transcript).filter(
+                Transcript.video_id == video.id,
+                Transcript.status == 'completed'
+            ).first()
+
+            if not transcript:
+                return jsonify({'error': 'No transcript available for this video'}), 404
+
+            # Get transcript segments
+            segments = db_session.query(TranscriptSegment).filter(
+                TranscriptSegment.transcript_id == transcript.id
+            ).order_by(TranscriptSegment.start_time).all()
+
+            if not segments:
+                return jsonify({'error': 'Transcript has no segments'}), 404
+
+            # Build transcript text (first 5000 chars for context)
+            transcript_text = ' '.join(s.text for s in segments)[:5000]
+
+            # Get existing video metadata for context
+            existing_speaker = video.speaker or ''
+            filename = video.filename or ''
+
+            # Use Claude to analyze
+            client = get_anthropic_client()
+
+            prompt = f"""Analyze this video transcript and extract metadata. The video filename is "{filename}".
+
+TRANSCRIPT (first part):
+{transcript_text}
+
+Based on this transcript, provide:
+1. A 1-2 sentence description of what this video is about
+2. The speaker's name (if mentioned or identifiable). Current value: "{existing_speaker}"
+3. The event name (conference, show, interview, etc.) if mentioned
+4. 3-5 relevant topic tags (comma-separated)
+5. Any other speakers mentioned (comma-separated)
+
+Respond in this exact JSON format:
+{{
+  "description": "...",
+  "speaker": "...",
+  "event_name": "...",
+  "topics": "...",
+  "other_speakers": "..."
+}}
+
+If you can't determine a field, use empty string. Be concise."""
+
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            # Parse response
+            response_text = response.content[0].text
+
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                suggestions = json.loads(json_match.group())
+            else:
+                suggestions = {}
+
+            return jsonify({
+                'success': True,
+                'suggestions': suggestions,
+                'transcript_preview': transcript_text[:500] + '...'
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/videos/<video_id>', methods=['PUT'])
+def api_update_video(video_id):
+    """Update video metadata."""
+    try:
+        data = request.json
+
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            # Update allowed fields
+            if 'filename' in data:
+                # Preserve .mp4 extension if not provided
+                new_filename = data['filename']
+                if new_filename and not new_filename.endswith('.mp4'):
+                    new_filename = new_filename + '.mp4'
+                video.filename = new_filename
+            if 'speaker' in data:
+                video.speaker = data['speaker'] or None
+            if 'event_name' in data:
+                video.event_name = data['event_name'] or None
+            if 'event_date' in data:
+                if data['event_date']:
+                    from datetime import datetime as dt
+                    video.event_date = dt.strptime(data['event_date'], '%Y-%m-%d').date()
+                else:
+                    video.event_date = None
+            if 'description' in data:
+                video.description = data['description'] or None
+
+            # Handle custom fields via extra_data (JSONB)
+            if 'tags' in data:
+                extra = video.extra_data or {}
+                extra['tags'] = data['tags']
+                video.extra_data = extra
+            if 'topics' in data:
+                extra = video.extra_data or {}
+                extra['topics'] = data['topics']
+                video.extra_data = extra
+            if 'custom_fields' in data:
+                extra = video.extra_data or {}
+                extra.update(data['custom_fields'])
+                video.extra_data = extra
+
+            db_session.commit()
+
+            return jsonify({
+                'success': True,
+                'video_id': str(video.id),
+                'message': 'Video updated successfully'
+            })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/videos/<video_id>', methods=['GET'])
+def api_get_video(video_id):
+    """Get single video details."""
+    try:
+        with DatabaseSession() as db_session:
+            video = db_session.query(Video).filter(Video.id == UUID(video_id)).first()
+            if not video:
+                return jsonify({'error': 'Video not found'}), 404
+
+            return jsonify({
+                'id': str(video.id),
+                'filename': video.filename,
+                'speaker': video.speaker,
+                'event_name': video.event_name,
+                'event_date': video.event_date.strftime('%Y-%m-%d') if video.event_date else None,
+                'description': video.description,
+                'duration': float(video.duration_seconds) if video.duration_seconds else None,
+                'extra_data': video.extra_data or {},
+                'tags': (video.extra_data or {}).get('tags', ''),
+                'topics': (video.extra_data or {}).get('topics', ''),
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
