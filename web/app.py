@@ -68,6 +68,31 @@ app.jinja_env.filters['duration'] = format_duration
 app.jinja_env.filters['timestamp'] = format_timestamp
 
 
+# Authentication - require login for all routes except public ones
+PUBLIC_ROUTES = {'login', 'register', 'logout', 'verify_2fa', 'static'}
+
+@app.before_request
+def require_login():
+    """Require authentication for all routes except public ones."""
+    # Allow public routes
+    if request.endpoint in PUBLIC_ROUTES:
+        return None
+
+    # Allow static files
+    if request.path.startswith('/static/'):
+        return None
+
+    # Check if user is logged in
+    if 'user_id' not in session:
+        # For API requests, return JSON error
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Authentication required'}), 401
+        # For page requests, redirect to login
+        return redirect(url_for('login'))
+
+    return None
+
+
 @app.route('/')
 def index():
     """Dashboard home page."""
