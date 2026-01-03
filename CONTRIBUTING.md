@@ -14,8 +14,8 @@ Welcome to the MV Internal video management platform! This guide will help you g
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/maurinventures/video-management.git
-cd video-management
+git clone https://github.com/maurinventures/video-management-prod.git
+cd video-management-prod
 ```
 
 ### 2. Set Up Python Environment
