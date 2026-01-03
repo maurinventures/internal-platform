@@ -3,23 +3,48 @@
 {% block title %}Transcripts - Video Manager{% endblock %}
 
 {% block content %}
-<h1>Transcripts</h1>
-
-<div style="margin-bottom: 1.5rem;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h1 style="margin: 0;">Transcripts</h1>
     <a href="/transcripts/search" class="btn">Search All Transcripts</a>
 </div>
 
 {% if transcripts %}
-<div class="grid">
-    {% for t in transcripts %}
-    <a href="/transcripts/{{ t.id }}" class="card" style="text-decoration: none;">
-        <div class="card-title">{{ t.video_title }}</div>
-        <div class="card-meta">
-            {{ t.segment_count }} segments &bull; {{ t.created_at|timestamp }}
-        </div>
-    </a>
-    {% endfor %}
+<div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+        <thead>
+            <tr style="background: #f8f8f6; border-bottom: 2px solid #e5e4df;">
+                <th style="text-align: left; padding: 0.75rem 1rem; font-weight: 600; color: #666;">Video Title</th>
+                <th style="text-align: center; padding: 0.75rem 1rem; font-weight: 600; color: #666; width: 120px;">Segments</th>
+                <th style="text-align: right; padding: 0.75rem 1rem; font-weight: 600; color: #666; width: 180px;">Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in transcripts %}
+            <tr style="border-bottom: 1px solid #e5e4df; cursor: pointer; transition: background 0.15s;"
+                onclick="window.location='/transcripts/{{ t.id }}'"
+                onmouseover="this.style.background='#faf9f7'"
+                onmouseout="this.style.background='white'">
+                <td style="padding: 0.75rem 1rem;">
+                    <a href="/transcripts/{{ t.id }}" style="color: #1a1a1a; text-decoration: none; font-weight: 500;">
+                        {{ t.video_title }}
+                    </a>
+                </td>
+                <td style="text-align: center; padding: 0.75rem 1rem; color: #666;">
+                    {{ t.segment_count }}
+                </td>
+                <td style="text-align: right; padding: 0.75rem 1rem; color: #888; font-size: 0.8125rem;">
+                    {{ t.created_at|timestamp }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
+
+<div style="margin-top: 1rem; font-size: 0.8125rem; color: #888;">
+    {{ transcripts|length }} transcript{% if transcripts|length != 1 %}s{% endif %} total
+</div>
+
 {% else %}
 <div class="empty-state">
     <h2>No transcripts yet</h2>
