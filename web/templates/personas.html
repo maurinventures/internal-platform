@@ -3,8 +3,132 @@
 {% block title %}Personas - MV Internal{% endblock %}
 
 {% block content %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h1 {
+        margin: 0;
+    }
+
+    .page-subtitle {
+        color: #888;
+        font-size: 0.875rem;
+        margin-left: 1rem;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8125rem;
+    }
+
+    .data-table th {
+        background: #f8f8f6;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #666;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 2px solid #e5e4df;
+    }
+
+    .data-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e4df;
+        vertical-align: middle;
+    }
+
+    .data-table tbody tr {
+        transition: background 0.15s;
+        cursor: pointer;
+    }
+
+    .data-table tbody tr:hover {
+        background: #faf9f7;
+    }
+
+    .data-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .persona-name {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .persona-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .persona-avatar-placeholder {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #fef3f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #d97757;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .persona-name-text {
+        font-weight: 500;
+        color: #1a1a1a;
+    }
+
+    .col-desc {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #666;
+        font-size: 0.75rem;
+    }
+
+    .col-tone {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #888;
+        font-size: 0.75rem;
+    }
+
+    .col-meta {
+        color: #888;
+        font-size: 0.75rem;
+        text-align: center;
+    }
+
+    .table-footer {
+        margin-top: 1rem;
+        font-size: 0.8125rem;
+        color: #888;
+    }
+</style>
+
 <div class="page-header">
-    <div class="page-header-left">
+    <div style="display: flex; align-items: center;">
         <h1>Personas</h1>
         <span class="page-subtitle">{{ personas|length }} voice profiles</span>
     </div>
@@ -17,37 +141,50 @@
 </div>
 
 {% if personas %}
-<div class="grid">
-    {% for persona in personas %}
-    <a href="/personas/{{ persona.id }}" class="card" style="text-decoration: none;">
-        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
-            {% if persona.avatar_url %}
-            <img src="{{ persona.avatar_url }}" alt="{{ persona.name }}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
-            {% else %}
-            <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; font-size: 1.25rem;">
-                {{ persona.name[0] }}
-            </div>
-            {% endif %}
-            <div>
-                <div class="card-title">{{ persona.name }}</div>
-                {% if persona.tone %}
-                <div class="card-meta">{{ persona.tone[:50] }}{% if persona.tone|length > 50 %}...{% endif %}</div>
-                {% endif %}
-            </div>
-        </div>
-        {% if persona.description %}
-        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.75rem;">
-            {{ persona.description[:100] }}{% if persona.description|length > 100 %}...{% endif %}
-        </p>
-        {% endif %}
-        <div style="display: flex; gap: 1rem; font-size: 0.8125rem; color: var(--text-muted);">
-            <span>{{ persona.video_count }} videos</span>
-            <span>{{ persona.document_count }} docs</span>
-            <span>{{ persona.social_post_count }} posts</span>
-        </div>
-    </a>
-    {% endfor %}
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Tone</th>
+                <th style="text-align: center;">Videos</th>
+                <th style="text-align: center;">Docs</th>
+                <th style="text-align: center;">Posts</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for persona in personas %}
+            <tr onclick="window.location='/personas/{{ persona.id }}'">
+                <td>
+                    <div class="persona-name">
+                        {% if persona.avatar_url %}
+                        <img src="{{ persona.avatar_url }}" alt="{{ persona.name }}" class="persona-avatar">
+                        {% else %}
+                        <div class="persona-avatar-placeholder">{{ persona.name[0] }}</div>
+                        {% endif %}
+                        <span class="persona-name-text">{{ persona.name }}</span>
+                    </div>
+                </td>
+                <td class="col-desc" title="{{ persona.description or '' }}">
+                    {{ persona.description[:60] if persona.description else '—' }}{% if persona.description and persona.description|length > 60 %}...{% endif %}
+                </td>
+                <td class="col-tone" title="{{ persona.tone or '' }}">
+                    {{ persona.tone[:40] if persona.tone else '—' }}{% if persona.tone and persona.tone|length > 40 %}...{% endif %}
+                </td>
+                <td class="col-meta">{{ persona.video_count }}</td>
+                <td class="col-meta">{{ persona.document_count }}</td>
+                <td class="col-meta">{{ persona.social_post_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
+
+<div class="table-footer">
+    {{ personas|length }} persona{% if personas|length != 1 %}s{% endif %} total
+</div>
+
 {% else %}
 <div class="empty-state">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
