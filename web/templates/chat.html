@@ -4230,12 +4230,9 @@ async function loadConversations() {
         } else if (projectParam) {
             // Create new conversation in project
             await createNewConversation(projectParam);
-        } else if (conversations.length === 0) {
-            // Auto-create a new conversation if none exist
-            await createNewConversation();
         } else {
-            // Load the most recent conversation
-            await loadConversation(conversations[0].id);
+            // Default: show welcome screen with new chat
+            await createNewConversation();
         }
     } catch (e) {
         console.error('Failed to load conversations:', e);
