@@ -176,21 +176,23 @@
         color: #1a1a1a;
     }
 
-    /* Main chat area */
+    /* Main chat area - full width with scrollbar on window edge */
     .chat-main {
         flex: 1;
         display: flex;
         flex-direction: column;
-        max-width: 768px;
-        margin: 0 auto;
-        width: 100%;
+        overflow-y: auto;
+        position: relative;
     }
 
     .chat-messages {
         flex: 1;
-        overflow-y: auto;
         padding: 1.5rem;
         padding-bottom: 140px;
+        max-width: 768px;
+        width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
     }
 
     .message {
@@ -1384,7 +1386,7 @@
     .input-area {
         position: fixed;
         bottom: 0;
-        left: 0;
+        left: 280px;  /* Align with sidebar width */
         right: 0;
         background: #f5f4ef;
         border-top: 1px solid #e5e4df;
@@ -1393,7 +1395,10 @@
 
     .input-wrap {
         max-width: 768px;
+        width: 100%;
         margin: 0 auto;
+        padding: 0 1.5rem;
+        box-sizing: border-box;
     }
 
     .input-box {
