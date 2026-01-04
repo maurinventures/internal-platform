@@ -135,6 +135,10 @@
         background: #f0efea;
     }
 
+    .new-chat-btn.active {
+        background: #e8e6e1;
+    }
+
     .new-chat-icon {
         width: 18px;
         height: 18px;
@@ -3340,7 +3344,7 @@
         </button>
     </div>
 
-    <button class="new-chat-btn" onclick="createNewConversation()">
+    <button class="new-chat-btn" id="newChatBtn" onclick="createNewConversation()">
         <div class="new-chat-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         </div>
@@ -3856,13 +3860,21 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProjects();
     loadLibraryCounts();
 
-    // Handle view query parameter from library pages
+    // Handle view query parameter or default to chats list
     const urlParams = new URLSearchParams(window.location.search);
     const view = urlParams.get('view');
-    if (view === 'projects') {
+    const conversationId = urlParams.get('conversation');
+
+    if (conversationId) {
+        // Loading a specific conversation - don't show list view
+        // The conversation will be loaded by loadConversations callback
+    } else if (view === 'projects') {
         showProjectsListView();
     } else if (view === 'library') {
         showLibraryListView();
+    } else {
+        // Default: show chats list view
+        showChatsListView();
     }
 });
 
@@ -3876,6 +3888,7 @@ function hideAllViews() {
     document.querySelector('.input-area').style.display = 'none';
     document.querySelector('.chat-header').style.display = 'none';
     document.getElementById('chatsNavItem').classList.remove('active');
+    document.getElementById('newChatBtn').classList.remove('active');
     isChatsListViewActive = false;
     isProjectsListViewActive = false;
     isLibraryListViewActive = false;
@@ -4071,10 +4084,11 @@ function showChatView() {
     if (currentConv && currentConv.message_count > 0) {
         showChatInterface();
     } else {
-        // For new/empty chats, show welcome screen
+        // For new/empty chats, show welcome screen and highlight New chat button
         document.getElementById('welcomeScreen').style.display = 'flex';
         document.getElementById('chatMessages').style.display = 'none';
         document.querySelector('.input-area').style.display = 'none';
+        document.getElementById('newChatBtn').classList.add('active');
     }
 
     // Exit select mode if active
