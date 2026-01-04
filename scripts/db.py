@@ -227,6 +227,27 @@ class User(Base):
 
     # Relationships
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+
+
+class Project(Base):
+    """Projects group conversations with shared context and instructions."""
+
+    __tablename__ = "projects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    custom_instructions = Column(Text)  # System prompt for AI in this project
+    color = Column(String(20), default="#d97757")  # Project color for UI
+    is_archived = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="projects")
+    conversations = relationship("Conversation", back_populates="project", cascade="all, delete-orphan")
 
 
 class Conversation(Base):
@@ -236,6 +257,7 @@ class Conversation(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     title = Column(String(255), nullable=False, default="New Chat")
     video_id = Column(UUID(as_uuid=True), ForeignKey("videos.id", ondelete="SET NULL"), nullable=True)
     is_collaborative = Column(Integer, default=0)  # 1 if shared with team
@@ -244,6 +266,7 @@ class Conversation(Base):
 
     # Relationships
     user = relationship("User", back_populates="conversations")
+    project = relationship("Project", back_populates="conversations")
     messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
     video = relationship("Video")
     participants = relationship("ChatParticipant", back_populates="conversation", cascade="all, delete-orphan")

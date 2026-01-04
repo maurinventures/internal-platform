@@ -17,7 +17,7 @@ import anthropic
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import boto3
-from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, CompiledVideo, ScriptFeedback, Conversation, ChatMessage, User, AILog, Persona, Document, SocialPost, AudioRecording, AudioSegment
+from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, CompiledVideo, ScriptFeedback, Conversation, ChatMessage, User, AILog, Persona, Document, SocialPost, AudioRecording, AudioSegment, Project
 import time
 import hashlib
 import pyotp
@@ -1519,6 +1519,26 @@ def chat():
     return render_template('chat.html')
 
 
+@app.route('/project/<project_id>')
+def project_page(project_id):
+    """Project detail page."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = UUID(session['user_id'])
+
+    with DatabaseSession() as db_session:
+        project = db_session.query(Project).filter(
+            Project.id == UUID(project_id),
+            Project.user_id == user_id
+        ).first()
+
+        if not project:
+            return redirect(url_for('chat'))
+
+    return render_template('project.html', project_id=project_id)
+
+
 @app.route('/ai-logs')
 def ai_logs():
     """View AI call logs for quality monitoring."""
@@ -1771,6 +1791,221 @@ def api_delete_persona(persona_id):
         db_session.commit()
 
         return jsonify({'success': True})
+
+
+# ============================================================
+# PROJECTS API
+# ============================================================
+
+@app.route('/api/projects', methods=['GET'])
+def api_list_projects():
+    """API: List all projects for current user."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+    include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+
+    with DatabaseSession() as db_session:
+        query = db_session.query(Project).filter(Project.user_id == user_id)
+        if not include_archived:
+            query = query.filter(Project.is_archived == 0)
+        projects = query.order_by(Project.created_at.desc()).all()
+
+        return jsonify([{
+            'id': str(p.id),
+            'name': p.name,
+            'description': p.description,
+            'custom_instructions': p.custom_instructions,
+            'color': p.color,
+            'is_archived': p.is_archived,
+            'conversation_count': len(p.conversations),
+            'created_at': p.created_at.isoformat() if p.created_at else None,
+            'updated_at': p.updated_at.isoformat() if p.updated_at else None
+        } for p in projects])
+
+
+@app.route('/api/projects', methods=['POST'])
+def api_create_project():
+    """API: Create a new project."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+    data = request.json or {}
+    name = data.get('name', '').strip()
+
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+
+    with DatabaseSession() as db_session:
+        project = Project(
+            user_id=user_id,
+            name=name,
+            description=data.get('description', '').strip() or None,
+            custom_instructions=data.get('custom_instructions', '').strip() or None,
+            color=data.get('color', '#d97757')
+        )
+        db_session.add(project)
+        db_session.commit()
+
+        return jsonify({
+            'id': str(project.id),
+            'name': project.name,
+            'description': project.description,
+            'custom_instructions': project.custom_instructions,
+            'color': project.color,
+            'created_at': project.created_at.isoformat() if project.created_at else None
+        }), 201
+
+
+@app.route('/api/projects/<project_id>', methods=['GET'])
+def api_get_project(project_id):
+    """API: Get project details with conversations."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+
+    with DatabaseSession() as db_session:
+        project = db_session.query(Project).filter(
+            Project.id == UUID(project_id),
+            Project.user_id == user_id
+        ).first()
+
+        if not project:
+            return jsonify({'error': 'Project not found'}), 404
+
+        conversations = [{
+            'id': str(c.id),
+            'title': c.title,
+            'created_at': c.created_at.isoformat() if c.created_at else None,
+            'updated_at': c.updated_at.isoformat() if c.updated_at else None
+        } for c in project.conversations]
+
+        return jsonify({
+            'id': str(project.id),
+            'name': project.name,
+            'description': project.description,
+            'custom_instructions': project.custom_instructions,
+            'color': project.color,
+            'is_archived': project.is_archived,
+            'conversations': conversations,
+            'created_at': project.created_at.isoformat() if project.created_at else None,
+            'updated_at': project.updated_at.isoformat() if project.updated_at else None
+        })
+
+
+@app.route('/api/projects/<project_id>', methods=['PUT'])
+def api_update_project(project_id):
+    """API: Update a project."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+    data = request.json or {}
+
+    with DatabaseSession() as db_session:
+        project = db_session.query(Project).filter(
+            Project.id == UUID(project_id),
+            Project.user_id == user_id
+        ).first()
+
+        if not project:
+            return jsonify({'error': 'Project not found'}), 404
+
+        if 'name' in data:
+            name = data['name'].strip()
+            if not name:
+                return jsonify({'error': 'Name cannot be empty'}), 400
+            project.name = name
+
+        if 'description' in data:
+            project.description = data['description'].strip() or None
+
+        if 'custom_instructions' in data:
+            project.custom_instructions = data['custom_instructions'].strip() or None
+
+        if 'color' in data:
+            project.color = data['color']
+
+        if 'is_archived' in data:
+            project.is_archived = 1 if data['is_archived'] else 0
+
+        project.updated_at = datetime.utcnow()
+        db_session.commit()
+
+        return jsonify({
+            'id': str(project.id),
+            'name': project.name,
+            'description': project.description,
+            'custom_instructions': project.custom_instructions,
+            'color': project.color,
+            'is_archived': project.is_archived,
+            'updated_at': project.updated_at.isoformat() if project.updated_at else None
+        })
+
+
+@app.route('/api/projects/<project_id>', methods=['DELETE'])
+def api_delete_project(project_id):
+    """API: Archive (soft delete) a project."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+
+    with DatabaseSession() as db_session:
+        project = db_session.query(Project).filter(
+            Project.id == UUID(project_id),
+            Project.user_id == user_id
+        ).first()
+
+        if not project:
+            return jsonify({'error': 'Project not found'}), 404
+
+        project.is_archived = 1
+        project.updated_at = datetime.utcnow()
+        db_session.commit()
+
+        return jsonify({'success': True})
+
+
+@app.route('/api/conversations/<conversation_id>/project', methods=['PUT'])
+def api_set_conversation_project(conversation_id):
+    """API: Assign a conversation to a project."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    user_id = UUID(session['user_id'])
+    data = request.json or {}
+    project_id = data.get('project_id')
+
+    with DatabaseSession() as db_session:
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == user_id
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        if project_id:
+            # Verify project exists and belongs to user
+            project = db_session.query(Project).filter(
+                Project.id == UUID(project_id),
+                Project.user_id == user_id
+            ).first()
+            if not project:
+                return jsonify({'error': 'Project not found'}), 404
+            conversation.project_id = project.id
+        else:
+            # Remove from project
+            conversation.project_id = None
+
+        conversation.updated_at = datetime.utcnow()
+        db_session.commit()
+
+        return jsonify({'success': True, 'project_id': str(conversation.project_id) if conversation.project_id else None})
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -2128,12 +2363,25 @@ def api_create_conversation():
     data = request.json or {}
     title = data.get('title', 'New Chat')
     video_id = data.get('video_id')
+    project_id = data.get('project_id')
+
+    user_id = UUID(session['user_id'])
 
     with DatabaseSession() as db_session:
+        # Verify project belongs to user if provided
+        if project_id:
+            project = db_session.query(Project).filter(
+                Project.id == UUID(project_id),
+                Project.user_id == user_id
+            ).first()
+            if not project:
+                return jsonify({'error': 'Project not found'}), 404
+
         conversation = Conversation(
-            user_id=UUID(session['user_id']),
+            user_id=user_id,
             title=title,
-            video_id=UUID(video_id) if video_id else None
+            video_id=UUID(video_id) if video_id else None,
+            project_id=UUID(project_id) if project_id else None
         )
         db_session.add(conversation)
         db_session.commit()
@@ -2141,6 +2389,7 @@ def api_create_conversation():
         return jsonify({
             'id': str(conversation.id),
             'title': conversation.title,
+            'project_id': str(conversation.project_id) if conversation.project_id else None,
             'created_at': conversation.created_at.isoformat()
         })
 
