@@ -12,7 +12,7 @@
     (function() {
         var style = document.createElement('style');
         // Always disable chevron transitions on initial load
-        var css = '.sidebar-section-toggle { transition: none !important; }';
+        var css = '.sidebar-section-toggle { transition: none !important; } .recents-project-chevron { transition: none !important; }';
 
         // Projects section - if explicitly collapsed
         if (localStorage.getItem('projectsExpanded') === 'false') {
@@ -971,7 +971,33 @@
     </div>
 
     <div class="conversations-list" id="conversationsList">
-        <!-- Recent conversations loaded dynamically -->
+        {% for group in sidebar_conv_groups %}
+        <div class="recents-project-group">
+            <div class="recents-project-header expanded" onclick="toggleRecentsProject('{{ group.project.id }}')">
+                <span class="recents-project-dot" style="background: {{ group.project.color }}"></span>
+                <span class="recents-project-name">{{ group.project.name }}</span>
+                <svg class="recents-project-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="recents-project-items expanded" id="recents-project-{{ group.project.id }}">
+                {% for conv in group.conversations %}
+                <a href="/chat?conversation={{ conv.id }}" class="conversation-item nested">
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="conversation-title">{{ conv.title }}</div>
+                        <div class="conversation-date">{{ conv.updated_at }}</div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% for conv in sidebar_conv_ungrouped %}
+        <a href="/chat?conversation={{ conv.id }}" class="conversation-item">
+            <div style="flex: 1; min-width: 0;">
+                <div class="conversation-title">{{ conv.title }}</div>
+                <div class="conversation-date">{{ conv.updated_at }}</div>
+            </div>
+        </a>
+        {% endfor %}
     </div>
 
     <div class="sidebar-footer">
@@ -1105,8 +1131,8 @@ let editProjectColor = '#d97757';
 // Load project data
 document.addEventListener('DOMContentLoaded', () => {
     loadProject();
-    loadProjects();
-    loadConversations();
+    // Sidebar data is now server-rendered by Jinja - no initial JS load needed
+    // loadProjects() and loadConversations() are kept for refreshing after actions
 });
 
 // Load recent conversations for sidebar

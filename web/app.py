@@ -1716,9 +1716,11 @@ def project_page(project_id):
         if not project:
             return redirect(url_for('chat'))
 
-    sidebar_projects, _, _ = get_sidebar_data(user_id)
+    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
     return render_template('project.html', project_id=project_id,
-                         sidebar_projects=sidebar_projects)
+                         sidebar_projects=sidebar_projects,
+                         sidebar_conv_groups=conv_groups,
+                         sidebar_conv_ungrouped=conv_ungrouped)
 
 
 @app.route('/ai-logs')
