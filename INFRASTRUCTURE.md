@@ -172,7 +172,7 @@ sudo systemctl restart mv-internal.service
 │   ├── .git/
 │   ├── config/
 │   └── ...
-└── PRODUCTION_SETUP.md    # This reference doc
+└── INFRASTRUCTURE.md      # This reference doc
 ```
 
 ---

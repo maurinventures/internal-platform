@@ -147,22 +147,24 @@ video-management-prod/
 
 ### Deploying to Production
 
-The production server is on EC2 (54.198.253.138). To deploy:
+The production server is on EC2 (54.198.253.138). The server has two directories:
+- `~/video-management` - Git repo (source of truth)
+- `~/mv-internal` - Production directory (served by nginx)
+
+To deploy:
 
 ```bash
 # SSH to EC2
 ssh -i ~/Documents/keys/per_aspera/per-aspera-key.pem ec2-user@54.198.253.138
 
-# Pull changes and restart service
-cd /home/ec2-user/mv-internal
-git pull
-sudo systemctl restart mv-internal.service
-```
+# Pull latest code
+cd ~/video-management && git pull
 
-Or as a one-liner from local:
-```bash
-ssh -i ~/Documents/keys/per_aspera/per-aspera-key.pem ec2-user@54.198.253.138 \
-  "cd /home/ec2-user/mv-internal && git pull && sudo systemctl restart mv-internal.service"
+# Sync to production directory
+rsync -av ~/video-management/ ~/mv-internal/ --exclude='.git' --exclude='__pycache__' --exclude='*.pyc'
+
+# Restart service
+sudo systemctl restart mv-internal.service
 ```
 
 Note: You need the SSH key and access to the EC2 server. Contact the project owner for access.
