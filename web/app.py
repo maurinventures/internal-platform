@@ -108,6 +108,74 @@ If you didn't create an account, you can safely ignore this email.
         return False
 
 
+def send_invite_email(to_email: str, name: str, password: str) -> bool:
+    """Send account invite email with credentials via AWS SES."""
+    try:
+        ses = get_ses_client()
+        login_url = "https://maurinventuresinternal.com/login"
+
+        html_body = f"""
+        <html>
+        <body style="font-family: 'Inter', Arial, sans-serif; background-color: #f5f4ef; padding: 40px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="display: inline-block; width: 50px; height: 50px; background: #d97757; border-radius: 10px; line-height: 50px; color: white; font-size: 24px; font-weight: bold;">M</div>
+                </div>
+                <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px; text-align: center;">Welcome to MV Internal</h1>
+                <p style="color: #444; font-size: 16px; line-height: 1.6;">Hi {name},</p>
+                <p style="color: #444; font-size: 16px; line-height: 1.6;">You've been invited to join MV Internal. Here are your login credentials:</p>
+                <div style="background: #f5f4ef; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="color: #444; font-size: 14px; margin: 0 0 10px 0;"><strong>Email:</strong> {to_email}</p>
+                    <p style="color: #444; font-size: 14px; margin: 0;"><strong>Password:</strong> {password}</p>
+                </div>
+                <p style="color: #d97757; font-size: 14px; line-height: 1.6; font-weight: 600;">⚠️ Two-Factor Authentication Required</p>
+                <p style="color: #444; font-size: 14px; line-height: 1.6;">For security, you'll be required to set up 2FA (two-factor authentication) when you first log in. Have your authenticator app ready (Google Authenticator, Authy, etc.).</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{login_url}" style="display: inline-block; background: #d97757; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Log In Now</a>
+                </div>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">Please change your password after your first login.</p>
+                <hr style="border: none; border-top: 1px solid #e5e4df; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px; text-align: center;">MV Internal - Maurin Ventures</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_body = f"""
+Hi {name},
+
+You've been invited to join MV Internal. Here are your login credentials:
+
+Email: {to_email}
+Password: {password}
+
+⚠️ Two-Factor Authentication Required
+For security, you'll be required to set up 2FA when you first log in. Have your authenticator app ready.
+
+Log in at: {login_url}
+
+Please change your password after your first login.
+
+- MV Internal Team
+        """
+
+        ses.send_email(
+            Source="MV Internal <noreply@maurinventuresinternal.com>",
+            Destination={"ToAddresses": [to_email]},
+            Message={
+                "Subject": {"Data": "You're invited to MV Internal", "Charset": "UTF-8"},
+                "Body": {
+                    "Text": {"Data": text_body, "Charset": "UTF-8"},
+                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                },
+            },
+        )
+        return True
+    except Exception as e:
+        print(f"Failed to send invite email: {e}")
+        return False
+
+
 app = Flask(__name__)
 
 # Session configuration - persistent sessions that survive browser close
