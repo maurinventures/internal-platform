@@ -264,14 +264,8 @@ async function loadConversations() {
 }
 
 function renderConversations() {
-    const container = document.getElementById('conversationsList');
-    if (!container) return;
-    const recentConvs = conversations.slice(0, 5);
-    if (recentConvs.length === 0) {
-        container.innerHTML = '<div style="padding: 0.5rem 1rem; font-size: 0.8125rem; color: #888;">No recent chats</div>';
-        return;
-    }
-    container.innerHTML = recentConvs.map(conv => `<a href="/chat?c=${conv.id}" class="conversation-item"><span class="conversation-title">${escapeHtml(conv.title || 'Untitled')}</span></a>`).join('');
+    // Use shared function for consistent project-grouped rendering
+    renderConversationsGrouped(conversations);
 }
 
 async function loadProjects() {
