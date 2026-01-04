@@ -235,18 +235,10 @@ def require_login():
 
 @app.route('/')
 def index():
-    """Dashboard home page."""
-    with DatabaseSession() as db_session:
-        video_count = db_session.query(Video).count()
-        transcript_count = db_session.query(Transcript).filter(Transcript.status == "completed").count()
-        persona_count = db_session.query(Persona).filter(Persona.is_active == 1).count()
-        document_count = db_session.query(Document).count()
-
-    return render_template('index.html',
-                         video_count=video_count,
-                         transcript_count=transcript_count,
-                         persona_count=persona_count,
-                         document_count=document_count)
+    """Redirect to chat (requires login)."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return redirect(url_for('chat'))
 
 
 @app.route('/videos')
