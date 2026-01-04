@@ -889,6 +889,154 @@
         background: #fef2f2;
     }
 
+    /* Projects List View */
+    .projects-list-view {
+        flex: 1;
+        padding: 2rem;
+        max-width: 900px;
+        width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        display: none;
+    }
+
+    .projects-list-view.active {
+        display: block;
+    }
+
+    .projects-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+    }
+
+    .projects-list-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+
+    .projects-new-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: #1a1a1a;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .projects-new-btn:hover {
+        background: #333;
+    }
+
+    .projects-new-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .projects-search-wrapper {
+        margin-bottom: 1rem;
+    }
+
+    .projects-search {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        padding-left: 2.5rem;
+        border: 1px solid #e5e4df;
+        border-radius: 8px;
+        font-size: 0.9375rem;
+        font-family: inherit;
+        background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 0.75rem center;
+    }
+
+    .projects-search:focus {
+        outline: none;
+        border-color: #d97757;
+    }
+
+    .projects-count-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        color: #666;
+    }
+
+    .projects-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1rem;
+    }
+
+    .project-card {
+        background: white;
+        border: 1px solid #e5e4df;
+        border-radius: 12px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .project-card:hover {
+        border-color: #d97757;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .project-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .project-card-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .project-card-icon svg {
+        width: 20px;
+        height: 20px;
+        color: white;
+    }
+
+    .project-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .project-card-desc {
+        font-size: 0.8125rem;
+        color: #666;
+        margin-bottom: 0.75rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .project-card-meta {
+        font-size: 0.75rem;
+        color: #888;
+    }
+
     .message {
         margin-bottom: 1.5rem;
     }
@@ -2762,14 +2910,14 @@
             </svg>
             Chats
         </div>
-        <div class="sidebar-section-header expanded" onclick="toggleProjectsSection()">
-            <div class="sidebar-section-header-left">
+        <div class="sidebar-section-header expanded" id="projectsNavItem">
+            <div class="sidebar-section-header-left" onclick="showProjectsListView()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
                 Projects
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleProjectsSection()">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
@@ -3002,6 +3150,26 @@
         </div>
     </div>
 
+    <!-- Projects List View -->
+    <div class="projects-list-view" id="projectsListView">
+        <div class="projects-list-header">
+            <h1 class="projects-list-title">Projects</h1>
+            <button class="projects-new-btn" onclick="showCreateProjectModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                New project
+            </button>
+        </div>
+        <div class="projects-search-wrapper">
+            <input type="text" class="projects-search" id="projectsSearch" placeholder="Search your projects..." oninput="filterProjectsList()">
+        </div>
+        <div class="projects-count-row">
+            <span id="projectsCount">0 projects</span>
+        </div>
+        <div class="projects-grid" id="projectsGrid">
+            <!-- Project cards loaded dynamically -->
+        </div>
+    </div>
+
     <div class="chat-messages" id="chatMessages">
         <div class="message-assistant">
             <div class="message-body">
@@ -3092,8 +3260,10 @@ let conversations = [];
 
 // View state
 let isChatsListViewActive = false;
+let isProjectsListViewActive = false;
 let isSelectMode = false;
 let selectedChats = new Set();
+let projects = [];
 
 // Load conversations and projects on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -3101,20 +3271,72 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProjects();
 });
 
-// Chats List View Functions
-function showChatsListView() {
-    isChatsListViewActive = true;
-    document.getElementById('chatsListView').classList.add('active');
+// Hide all list views and chat
+function hideAllViews() {
+    document.getElementById('chatsListView').classList.remove('active');
+    document.getElementById('projectsListView').classList.remove('active');
     document.getElementById('chatMessages').style.display = 'none';
     document.querySelector('.input-area').style.display = 'none';
     document.querySelector('.chat-header').style.display = 'none';
+    document.getElementById('chatsNavItem').classList.remove('active');
+    isChatsListViewActive = false;
+    isProjectsListViewActive = false;
+}
+
+// Chats List View Functions
+function showChatsListView() {
+    hideAllViews();
+    isChatsListViewActive = true;
+    document.getElementById('chatsListView').classList.add('active');
     document.getElementById('chatsNavItem').classList.add('active');
     renderChatsList();
 }
 
+// Projects List View Functions
+function showProjectsListView() {
+    hideAllViews();
+    isProjectsListViewActive = true;
+    document.getElementById('projectsListView').classList.add('active');
+    renderProjectsList();
+}
+
+function renderProjectsList() {
+    const grid = document.getElementById('projectsGrid');
+    const searchTerm = document.getElementById('projectsSearch').value.toLowerCase();
+
+    const filteredProjects = projects.filter(proj =>
+        proj.name.toLowerCase().includes(searchTerm) ||
+        (proj.description && proj.description.toLowerCase().includes(searchTerm))
+    );
+
+    document.getElementById('projectsCount').textContent = `${filteredProjects.length} project${filteredProjects.length !== 1 ? 's' : ''}`;
+
+    grid.innerHTML = filteredProjects.map(proj => `
+        <div class="project-card" onclick="openProjectFromList('${proj.id}')">
+            <div class="project-card-header">
+                <div class="project-card-icon" style="background: ${proj.color || '#d97757'}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <div class="project-card-title">${escapeHtml(proj.name)}</div>
+            </div>
+            ${proj.description ? `<div class="project-card-desc">${escapeHtml(proj.description)}</div>` : ''}
+            <div class="project-card-meta">Updated ${timeAgo(proj.updated_at)}</div>
+        </div>
+    `).join('');
+}
+
+function filterProjectsList() {
+    renderProjectsList();
+}
+
+function openProjectFromList(projectId) {
+    window.location.href = `/project/${projectId}`;
+}
+
 function showChatView() {
-    isChatsListViewActive = false;
-    document.getElementById('chatsListView').classList.remove('active');
+    hideAllViews();
     document.getElementById('chatMessages').style.display = '';
     document.querySelector('.input-area').style.display = '';
     document.querySelector('.chat-header').style.display = '';
@@ -5104,7 +5326,6 @@ function toggleLibrarySection() {
 }
 
 // Projects functionality
-let projects = [];
 let selectedProjectColor = '#d97757';
 
 async function loadProjects() {
