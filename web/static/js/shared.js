@@ -89,20 +89,33 @@ function restoreSidebarState() {
         if (sidebar) sidebar.classList.add('collapsed');
     }
 
-    // Restore Projects section state
-    if (localStorage.getItem('projectsExpanded') === 'false') {
-        const headers = document.querySelectorAll('.sidebar-section-header');
-        const projectsSection = document.getElementById('projectsSection');
-        if (headers[0]) headers[0].classList.remove('expanded');
-        if (projectsSection) projectsSection.classList.remove('expanded');
-    }
+    // Restore Projects section state (use IDs for reliability)
+    const projectsHeader = document.getElementById('projectsHeader');
+    const projectsSection = document.getElementById('projectsSection');
+    const projectsExpanded = localStorage.getItem('projectsExpanded');
 
-    // Restore Library section state
-    if (localStorage.getItem('libraryExpanded') === 'false') {
-        const headers = document.querySelectorAll('.sidebar-section-header');
-        const librarySection = document.getElementById('librarySection');
-        if (headers[1]) headers[1].classList.remove('expanded');
+    if (projectsExpanded === 'false') {
+        // Explicitly collapsed
+        if (projectsHeader) projectsHeader.classList.remove('expanded');
+        if (projectsSection) projectsSection.classList.remove('expanded');
+    } else if (projectsExpanded === 'true') {
+        // Explicitly expanded
+        if (projectsHeader) projectsHeader.classList.add('expanded');
+        if (projectsSection) projectsSection.classList.add('expanded');
+    }
+    // If null (never set), leave HTML default
+
+    // Restore Library section state (use IDs for reliability)
+    const libraryHeader = document.getElementById('libraryHeader');
+    const librarySection = document.getElementById('librarySection');
+    const libraryExpanded = localStorage.getItem('libraryExpanded');
+
+    if (libraryExpanded === 'false') {
+        if (libraryHeader) libraryHeader.classList.remove('expanded');
         if (librarySection) librarySection.classList.remove('expanded');
+    } else if (libraryExpanded === 'true') {
+        if (libraryHeader) libraryHeader.classList.add('expanded');
+        if (librarySection) librarySection.classList.add('expanded');
     }
 }
 

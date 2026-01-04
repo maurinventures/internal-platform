@@ -296,16 +296,11 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (localStorage.getItem('sidebarCollapsed') === 'true') {
-        document.getElementById('sidebar').classList.add('collapsed');
-    }
+    // Sidebar state restoration is handled by shared.js restoreSidebarState()
+
+    // Load data for sidebar
     loadConversations();
     loadProjects();
-    const projectsExpanded = localStorage.getItem('projectsExpanded') === 'true';
-    if (projectsExpanded) {
-        document.getElementById('projectsHeader').classList.add('expanded');
-        document.getElementById('projectsSection').classList.add('expanded');
-    }
 });
 </script>
 </body>

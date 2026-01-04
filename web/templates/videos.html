@@ -985,24 +985,11 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Restore sidebar state
-    if (localStorage.getItem('sidebarCollapsed') === 'true') {
-        document.getElementById('sidebar').classList.add('collapsed');
-    }
+    // Sidebar state restoration is handled by shared.js restoreSidebarState()
 
     // Load data for sidebar
     loadConversations();
     loadProjects();
-
-    // Restore Projects section state (default collapsed on library pages)
-    const projectsExpanded = localStorage.getItem('projectsExpanded') === 'true';
-    if (projectsExpanded) {
-        document.getElementById('projectsHeader').classList.add('expanded');
-        document.getElementById('projectsSection').classList.add('expanded');
-    }
-
-    // Library section always starts expanded on library pages
-    // (already set in HTML with expanded class)
 });
 </script>
 </body>
