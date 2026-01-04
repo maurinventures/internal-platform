@@ -3170,7 +3170,16 @@ function format(text) {
         </div>`;
     });
 
-    // Bold and italic (use [\s\S] to match across newlines)
+    // Strip markdown formatting for clean, human-like text
+    text = text.replace(/^#{1,6}\s+(.*)$/gm, '$1');  // Headers
+    text = text.replace(/^[\*\-]\s+/gm, '• ');       // Bullet lists to simple bullets
+    text = text.replace(/^\d+\.\s+/gm, '');          // Remove numbered list markers
+    text = text.replace(/```[\s\S]*?```/g, '');      // Remove code blocks
+    text = text.replace(/`([^`]+)`/g, '$1');         // Inline code to plain text
+    text = text.replace(/^\>\s+/gm, '');             // Remove blockquotes
+    text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1'); // Links to just text
+
+    // Bold and italic
     text = text.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/\*([\s\S]*?)\*/g, '<em>$1</em>');
 
