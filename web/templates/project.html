@@ -7,6 +7,35 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+    // Restore sidebar state BEFORE first paint to prevent layout shift
+    (function() {
+        var style = document.createElement('style');
+        var css = '';
+
+        // Projects section - if explicitly collapsed
+        if (localStorage.getItem('projectsExpanded') === 'false') {
+            css += '#projectsSection { display: none !important; }';
+            css += '#projectsHeader:not(.expanded) .sidebar-section-toggle { transform: rotate(0deg) !important; }';
+        }
+
+        // Library section - if explicitly collapsed
+        if (localStorage.getItem('libraryExpanded') === 'false') {
+            css += '#librarySection { display: none !important; }';
+        }
+
+        // Sidebar collapsed
+        if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            css += '.sidebar { width: 0 !important; transform: translateX(-260px) !important; }';
+        }
+
+        if (css) {
+            style.id = 'sidebar-state-override';
+            style.textContent = css;
+            document.head.appendChild(style);
+        }
+    })();
+    </script>
 </head>
 <body>
 <style>

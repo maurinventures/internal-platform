@@ -117,6 +117,12 @@ function restoreSidebarState() {
         if (libraryHeader) libraryHeader.classList.add('expanded');
         if (librarySection) librarySection.classList.add('expanded');
     }
+
+    // Remove the blocking style override now that classes are properly set
+    const overrideStyle = document.getElementById('sidebar-state-override');
+    if (overrideStyle) {
+        overrideStyle.remove();
+    }
 }
 
 // ============================================
