@@ -116,23 +116,48 @@
     .new-chat-btn {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        margin: 0 0.75rem 0.5rem;
-        padding: 0.625rem 0.75rem;
+        gap: 0.75rem;
+        width: 100%;
+        margin: 0 0 0.5rem;
+        padding: 0.5rem 1rem;
         background: transparent;
-        border: 1px solid #e5e4df;
-        border-radius: 8px;
-        color: #444;
+        border: none;
+        border-radius: 6px;
         font-size: 0.875rem;
-        font-family: inherit;
+        color: #444;
         cursor: pointer;
-        transition: all 0.15s;
+        font-family: inherit;
+        text-decoration: none;
+        transition: background 0.15s;
     }
 
     .new-chat-btn:hover {
         background: #f5f4ef;
-        border-color: #d97757;
-        color: #d97757;
+    }
+
+    .new-chat-icon {
+        width: 24px;
+        height: 24px;
+        border: 1.5px solid #888;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .new-chat-icon svg {
+        width: 14px;
+        height: 14px;
+        color: #888;
+    }
+
+    .new-chat-btn:hover .new-chat-icon {
+        border-color: #1a1a1a;
+    }
+
+    .new-chat-btn:hover .new-chat-icon svg {
+        color: #1a1a1a;
     }
 
     .new-chat-btn svg {
@@ -729,7 +754,9 @@
     </div>
 
     <a href="/chat" class="new-chat-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        <div class="new-chat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
         New chat
     </a>
 
