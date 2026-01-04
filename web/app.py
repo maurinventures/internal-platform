@@ -2448,10 +2448,20 @@ def api_create_conversation():
         db_session.add(conversation)
         db_session.commit()
 
+        # Get project info if project_id was provided
+        project_info = None
+        if project_id and project:
+            project_info = {
+                'id': str(project.id),
+                'name': project.name,
+                'color': project.color
+            }
+
         return jsonify({
             'id': str(conversation.id),
             'title': conversation.title,
             'project_id': str(conversation.project_id) if conversation.project_id else None,
+            'project': project_info,
             'created_at': conversation.created_at.isoformat()
         })
 
@@ -2471,10 +2481,21 @@ def api_get_conversation(conversation_id):
         if not conversation:
             return jsonify({'error': 'Conversation not found'}), 404
 
+        # Get project info if available
+        project_info = None
+        if conversation.project:
+            project_info = {
+                'id': str(conversation.project.id),
+                'name': conversation.project.name,
+                'color': conversation.project.color
+            }
+
         return jsonify({
             'id': str(conversation.id),
             'title': conversation.title,
             'video_id': str(conversation.video_id) if conversation.video_id else None,
+            'project_id': str(conversation.project_id) if conversation.project_id else None,
+            'project': project_info,
             'created_at': conversation.created_at.isoformat(),
             'updated_at': conversation.updated_at.isoformat(),
             'messages': [{
