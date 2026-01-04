@@ -1571,7 +1571,9 @@ def chat():
     """New chat - shows welcome screen for starting a new conversation."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('chat.html', view='new')
+    # Support ?project=<id> to create new chat in a specific project
+    project_id = request.args.get('project')
+    return render_template('chat.html', view='new', project_id=project_id)
 
 
 @app.route('/chat/recents')
