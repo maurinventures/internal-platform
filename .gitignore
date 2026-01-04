@@ -37,6 +37,7 @@ logs/
 *.swp
 *.swo
 .DS_Store
+.claude/
 
 # Temp files
 /tmp/
