@@ -4313,6 +4313,11 @@ function renderConversationItem(conv) {
 // escapeHtml() and formatDate() - now in shared.js
 
 async function createNewConversation(projectId = null) {
+    // Switch to chat view if we're in any list view
+    if (isChatsListViewActive || isProjectsListViewActive || isLibraryListViewActive) {
+        showChatView();
+    }
+
     // Check for existing empty chat (no messages) to reuse
     // If creating a project chat, look for empty chat in that specific project
     // If creating a regular chat, look for any empty chat without a project
@@ -4380,8 +4385,8 @@ async function createNewConversation(projectId = null) {
 }
 
 async function loadConversation(conversationId) {
-    // Switch to chat view if in chats list view
-    if (isChatsListViewActive) {
+    // Switch to chat view if in any list view
+    if (isChatsListViewActive || isProjectsListViewActive || isLibraryListViewActive) {
         showChatView();
     }
 
