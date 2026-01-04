@@ -2524,6 +2524,172 @@
         height: 16px;
     }
 
+    /* Welcome screen - centered new chat view */
+    .welcome-screen {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .welcome-greeting {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+    }
+
+    .welcome-icon {
+        width: 32px;
+        height: 32px;
+        color: #d97757;
+    }
+
+    .welcome-text {
+        font-family: 'EB Garamond', Georgia, serif;
+        font-size: 2rem;
+        font-weight: 400;
+        color: #1a1a1a;
+    }
+
+    .welcome-input-container {
+        width: 100%;
+        max-width: 600px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding: 1rem;
+    }
+
+    .welcome-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: none;
+        font-size: 1rem;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+    }
+
+    .welcome-input::placeholder {
+        color: #999;
+    }
+
+    .welcome-input-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 0.5rem;
+        border-top: 1px solid #f0efea;
+        margin-top: 0.5rem;
+    }
+
+    .welcome-input-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .welcome-action-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #888;
+        transition: all 0.15s;
+    }
+
+    .welcome-action-btn:hover {
+        background: #f0efea;
+        color: #1a1a1a;
+    }
+
+    .welcome-action-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .welcome-model-select {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .welcome-model-select select {
+        padding: 0.375rem 0.5rem;
+        border: 1px solid #e5e4df;
+        border-radius: 6px;
+        background: #fff;
+        font-size: 0.8125rem;
+        color: #444;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .welcome-send-btn {
+        width: 36px;
+        height: 36px;
+        background: #d97757;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+    }
+
+    .welcome-send-btn:hover {
+        background: #c56647;
+    }
+
+    .welcome-send-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .welcome-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .welcome-chip {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: white;
+        border: 1px solid #e5e4df;
+        border-radius: 2rem;
+        font-size: 0.875rem;
+        color: #444;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .welcome-chip:hover {
+        background: #f5f4ef;
+        border-color: #d97757;
+    }
+
+    .welcome-chip svg {
+        width: 16px;
+        height: 16px;
+        color: #888;
+    }
+
     /* Model selector */
     .model-selector {
         display: flex;
@@ -3470,17 +3636,64 @@
         </div>
     </div>
 
-    <div class="chat-messages" id="chatMessages">
-        <div class="message-assistant">
-            <div class="message-body">
-                <p>I can help you create video scripts from your library of <strong>177 transcribed videos</strong>.</p>
-                <p>Tell me what you're looking for:</p>
-                <ul>
-                    <li>"Create a 60-second script about leadership"</li>
-                    <li>"Find powerful clips about space exploration"</li>
-                    <li>"What are the most inspiring moments about innovation?"</li>
-                </ul>
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <!-- Welcome screen for new chats -->
+    <div class="welcome-screen" id="welcomeScreen" style="display: none;">
+        <div class="welcome-greeting">
+            <svg class="welcome-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            <span class="welcome-text">Good afternoon, Joseph</span>
+        </div>
+
+        <div class="welcome-input-container">
+            <textarea class="welcome-input" id="welcomeInput" placeholder="What do you want to create?" rows="2" onkeydown="handleWelcomeKeyDown(event)" oninput="autoResizeWelcome(this)"></textarea>
+            <div class="welcome-input-footer">
+                <div class="welcome-input-actions">
+                    <button class="welcome-action-btn" title="Attach file">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="welcome-model-select">
+                    <select id="welcomeModelSelect">
+                        <option value="claude-sonnet" selected>Claude 3.5 Sonnet</option>
+                        <option value="claude-opus">Claude 3 Opus</option>
+                        <option value="claude-haiku">Claude 3 Haiku</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                    </select>
+                    <button class="welcome-send-btn" onclick="sendWelcomeMessage()" id="welcomeSendBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
+        </div>
+
+        <div class="welcome-chips">
+            <button class="welcome-chip" onclick="fillWelcomePrompt('Create a 60-second script about leadership')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                </svg>
+                Create a script
+            </button>
+            <button class="welcome-chip" onclick="fillWelcomePrompt('Find powerful clips about innovation and technology')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="M21 21l-4.35-4.35"/>
+                </svg>
+                Find clips
+            </button>
+            <button class="welcome-chip" onclick="fillWelcomePrompt('What are the most inspiring moments in my video library?')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                Discover highlights
+            </button>
         </div>
     </div>
 
@@ -3590,6 +3803,7 @@ function hideAllViews() {
     document.getElementById('projectsListView').classList.remove('active');
     document.getElementById('libraryListView').classList.remove('active');
     document.getElementById('chatMessages').style.display = 'none';
+    document.getElementById('welcomeScreen').style.display = 'none';
     document.querySelector('.input-area').style.display = 'none';
     document.querySelector('.chat-header').style.display = 'none';
     document.getElementById('chatsNavItem').classList.remove('active');
@@ -3781,9 +3995,19 @@ async function deleteProjectFromList(projectId) {
 
 function showChatView() {
     hideAllViews();
-    document.getElementById('chatMessages').style.display = '';
-    document.querySelector('.input-area').style.display = '';
     document.querySelector('.chat-header').style.display = '';
+
+    // Show welcome screen for empty chats, chat interface for chats with messages
+    const currentConv = conversations.find(c => c.id === currentConversationId);
+    if (currentConv && currentConv.message_count > 0) {
+        showChatInterface();
+    } else {
+        // For new/empty chats, show welcome screen
+        document.getElementById('welcomeScreen').style.display = 'flex';
+        document.getElementById('chatMessages').style.display = 'none';
+        document.querySelector('.input-area').style.display = 'none';
+    }
+
     // Exit select mode if active
     if (isSelectMode) {
         toggleSelectMode();
@@ -4043,6 +4267,19 @@ function formatDate(dateStr) {
 }
 
 async function createNewConversation(projectId = null) {
+    // Check for existing empty chat (no messages) to reuse
+    const emptyChat = conversations.find(c => c.message_count === 0);
+    if (emptyChat && !projectId) {
+        // Reuse existing empty chat
+        currentConversationId = emptyChat.id;
+        currentProjectId = emptyChat.project_id || null;
+        history = [];
+        clips = [];
+        renderConversations();
+        clearChat();
+        return;
+    }
+
     try {
         const body = { title: 'New Chat' };
         if (projectId) {
@@ -4062,7 +4299,8 @@ async function createNewConversation(projectId = null) {
             title: data.title,
             updated_at: data.created_at,
             message_count: 0,
-            project_id: data.project_id
+            project_id: data.project_id,
+            project: data.project || null
         });
 
         currentConversationId = data.id;
@@ -4092,21 +4330,28 @@ async function loadConversation(conversationId) {
         const data = await res.json();
 
         currentConversationId = conversationId;
+        currentProjectId = data.project_id || null;
         history = [];
         clips = [];
+        chatMessages.innerHTML = '';
         renderConversations();
-        clearChat();
 
-        // Load messages
-        for (const msg of data.messages) {
-            if (msg.role === 'user') {
-                addMsg(msg.content, true);
-                history.push({ role: 'user', content: msg.content });
-            } else {
-                addMsg(msg.content, false, msg.clips || [], 0);
-                history.push({ role: 'assistant', content: msg.content });
-                if (msg.clips && msg.clips.length > 0) {
-                    clips = msg.clips;
+        // If no messages, show welcome screen; otherwise show chat interface
+        if (!data.messages || data.messages.length === 0) {
+            clearChat();
+        } else {
+            showChatInterface();
+            // Load messages
+            for (const msg of data.messages) {
+                if (msg.role === 'user') {
+                    addMsg(msg.content, true);
+                    history.push({ role: 'user', content: msg.content });
+                } else {
+                    addMsg(msg.content, false, msg.clips || [], 0);
+                    history.push({ role: 'assistant', content: msg.content });
+                    if (msg.clips && msg.clips.length > 0) {
+                        clips = msg.clips;
+                    }
                 }
             }
         }
@@ -4164,19 +4409,68 @@ async function deleteConversation(conversationId) {
 }
 
 function clearChat() {
-    chatMessages.innerHTML = `
-        <div class="message-assistant">
-            <div class="message-body">
-                <p>I can help you create video scripts from your library of <strong>177 transcribed videos</strong>.</p>
-                <p>Tell me what you're looking for:</p>
-                <ul>
-                    <li>"Create a 60-second script about leadership"</li>
-                    <li>"Find powerful clips about space exploration"</li>
-                    <li>"What are the most inspiring moments about innovation?"</li>
-                </ul>
-            </div>
-        </div>
-    `;
+    // Show welcome screen, hide messages and input
+    chatMessages.innerHTML = '';
+    chatMessages.style.display = 'none';
+    document.getElementById('welcomeScreen').style.display = 'flex';
+    document.querySelector('.input-area').style.display = 'none';
+
+    // Update greeting based on time of day
+    const hour = new Date().getHours();
+    let greeting = 'Good morning';
+    if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
+    else if (hour >= 17) greeting = 'Good evening';
+    document.querySelector('.welcome-text').textContent = `${greeting}, Joseph`;
+
+    // Focus the welcome input
+    setTimeout(() => document.getElementById('welcomeInput').focus(), 100);
+}
+
+function showChatInterface() {
+    // Hide welcome screen, show messages and input
+    document.getElementById('welcomeScreen').style.display = 'none';
+    chatMessages.style.display = 'flex';
+    document.querySelector('.input-area').style.display = 'block';
+}
+
+// Welcome screen functions
+function handleWelcomeKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendWelcomeMessage();
+    }
+}
+
+function autoResizeWelcome(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+}
+
+function fillWelcomePrompt(text) {
+    const input = document.getElementById('welcomeInput');
+    input.value = text;
+    input.focus();
+    autoResizeWelcome(input);
+}
+
+async function sendWelcomeMessage() {
+    const welcomeInput = document.getElementById('welcomeInput');
+    const msg = welcomeInput.value.trim();
+    if (!msg) return;
+
+    // Sync model selection to main model select
+    const welcomeModel = document.getElementById('welcomeModelSelect').value;
+    document.getElementById('modelSelect').value = welcomeModel;
+
+    // Switch to chat interface
+    showChatInterface();
+
+    // Put message in main input and send
+    chatInput.value = msg;
+    welcomeInput.value = '';
+
+    // Send the message
+    await sendMessage();
 }
 
 function format(text) {
@@ -4812,10 +5106,16 @@ async function sendMessage() {
             }
             history.push({ role: 'assistant', content: data.response });
 
-            // Update conversation title in sidebar if it was auto-named
+            // Update conversation in sidebar
             const conv = conversations.find(c => c.id === currentConversationId);
-            if (conv && conv.title === 'New Chat') {
-                conv.title = msg.substring(0, 50) + (msg.length > 50 ? '...' : '');
+            if (conv) {
+                // Update message count
+                conv.message_count = (conv.message_count || 0) + 2; // user + assistant
+
+                // Update title if it was auto-named
+                if (conv.title === 'New Chat') {
+                    conv.title = msg.substring(0, 50) + (msg.length > 50 ? '...' : '');
+                }
                 renderConversations();
             }
         }
