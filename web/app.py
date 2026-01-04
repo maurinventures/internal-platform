@@ -4,7 +4,8 @@ import os
 import sys
 import json
 import re
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -35,6 +36,77 @@ def get_s3_client():
         aws_secret_access_key=config.secrets.get("aws", {}).get("secret_access_key"),
         region_name=config.settings.get("aws", {}).get("region", "us-east-1"),
     )
+
+
+def get_ses_client():
+    """Get configured SES client."""
+    config = get_config()
+    return boto3.client(
+        "ses",
+        aws_access_key_id=config.secrets.get("aws", {}).get("access_key_id"),
+        aws_secret_access_key=config.secrets.get("aws", {}).get("secret_access_key"),
+        region_name="us-east-1",
+    )
+
+
+def send_verification_email(to_email: str, name: str, verification_token: str) -> bool:
+    """Send email verification link via AWS SES."""
+    try:
+        ses = get_ses_client()
+        verification_url = f"https://maurinventuresinternal.com/verify-email?token={verification_token}"
+
+        html_body = f"""
+        <html>
+        <body style="font-family: 'Inter', Arial, sans-serif; background-color: #f5f4ef; padding: 40px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="display: inline-block; width: 50px; height: 50px; background: #d97757; border-radius: 10px; line-height: 50px; color: white; font-size: 24px; font-weight: bold;">M</div>
+                </div>
+                <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px; text-align: center;">Verify Your Email</h1>
+                <p style="color: #444; font-size: 16px; line-height: 1.6;">Hi {name},</p>
+                <p style="color: #444; font-size: 16px; line-height: 1.6;">Welcome to MV Internal! Please verify your email address by clicking the button below:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_url}" style="display: inline-block; background: #d97757; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Verify Email</a>
+                </div>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">This link expires in 24 hours.</p>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">If you didn't create an account, you can safely ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #e5e4df; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px; text-align: center;">MV Internal - Maurin Ventures</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_body = f"""
+Hi {name},
+
+Welcome to MV Internal! Please verify your email address by clicking this link:
+
+{verification_url}
+
+This link expires in 24 hours.
+
+If you didn't create an account, you can safely ignore this email.
+
+- MV Internal Team
+        """
+
+        ses.send_email(
+            Source="MV Internal <noreply@maurinventuresinternal.com>",
+            Destination={"ToAddresses": [to_email]},
+            Message={
+                "Subject": {"Data": "Verify your email - MV Internal", "Charset": "UTF-8"},
+                "Body": {
+                    "Text": {"Data": text_body, "Charset": "UTF-8"},
+                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                },
+            },
+        )
+        return True
+    except Exception as e:
+        print(f"Failed to send verification email: {e}")
+        return False
+
 
 app = Flask(__name__)
 
@@ -69,7 +141,7 @@ app.jinja_env.filters['timestamp'] = format_timestamp
 
 
 # Authentication - require login for all routes except public ones
-PUBLIC_ROUTES = {'login', 'register', 'logout', 'verify_2fa', 'static'}
+PUBLIC_ROUTES = {'login', 'register', 'logout', 'verify_2fa', 'verify_email', 'setup_2fa_after_verify', 'static'}
 
 @app.before_request
 def require_login():
@@ -1705,24 +1777,22 @@ def login():
             if not user.is_active:
                 return render_template('login.html', error='Account is disabled')
 
-            # Check if 2FA is enabled
+            # Check if email is verified
+            if not user.email_verified:
+                return render_template('login.html', error='Please verify your email first. Check your inbox for the verification link.')
+
+            # Check if 2FA is enabled - IT IS MANDATORY
             if user.totp_enabled == 1 and user.totp_secret:
                 # Store pending auth in session
                 session['pending_2fa_user_id'] = str(user.id)
                 session['pending_2fa_email'] = user.email
                 return redirect(url_for('verify_2fa'))
 
-            # No 2FA - complete login
-            user.last_login = datetime.utcnow()
-            db_session.commit()
-
-            # Set up persistent session (7 days)
-            session.permanent = True
-            session['user_id'] = str(user.id)
-            session['user_name'] = user.name
-            session['user_email'] = user.email
-
-            return redirect(url_for('chat'))
+            # 2FA not set up - force setup (mandatory for all users)
+            session['pending_2fa_setup_user_id'] = str(user.id)
+            session['pending_2fa_setup_email'] = user.email
+            session['pending_2fa_setup_name'] = user.name
+            return redirect(url_for('setup_2fa_after_verify'))
 
     return render_template('login.html')
 
@@ -1844,7 +1914,7 @@ def logout():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration page."""
+    """User registration page with email verification."""
     if request.method == 'POST':
         data = request.form
         name = data.get('name', '').strip()
@@ -1858,8 +1928,8 @@ def register():
         if password != confirm:
             return render_template('register.html', error='Passwords do not match')
 
-        if len(password) < 6:
-            return render_template('register.html', error='Password must be at least 6 characters')
+        if len(password) < 8:
+            return render_template('register.html', error='Password must be at least 8 characters')
 
         with DatabaseSession() as db_session:
             # Check if email exists
@@ -1867,25 +1937,139 @@ def register():
             if existing:
                 return render_template('register.html', error='Email already registered')
 
-            # Create user
+            # Generate verification token
+            verification_token = secrets.token_urlsafe(32)
+            token_expires = datetime.utcnow() + timedelta(hours=24)
+
+            # Create user (unverified)
             password_hash = hashlib.sha256(password.encode()).hexdigest()
             user = User(
                 name=name,
                 email=email,
-                password_hash=password_hash
+                password_hash=password_hash,
+                email_verified=0,
+                verification_token=verification_token,
+                verification_token_expires=token_expires
             )
             db_session.add(user)
             db_session.commit()
 
-            # Auto-login with persistent session
-            session.permanent = True
-            session['user_id'] = str(user.id)
-            session['user_name'] = user.name
-            session['user_email'] = user.email
-
-            return redirect(url_for('chat'))
+            # Send verification email
+            if send_verification_email(email, name, verification_token):
+                return render_template('register.html',
+                    success=True,
+                    message=f'Check your email ({email}) for a verification link.')
+            else:
+                return render_template('register.html',
+                    success=True,
+                    message=f'Account created. Check your email ({email}) for verification.')
 
     return render_template('register.html')
+
+
+@app.route('/verify-email')
+def verify_email():
+    """Email verification endpoint."""
+    token = request.args.get('token', '')
+
+    if not token:
+        return render_template('login.html', error='Invalid verification link')
+
+    with DatabaseSession() as db_session:
+        user = db_session.query(User).filter(User.verification_token == token).first()
+
+        if not user:
+            return render_template('login.html', error='Invalid or expired verification link')
+
+        # Check if token is expired
+        if user.verification_token_expires and user.verification_token_expires < datetime.utcnow():
+            return render_template('login.html', error='Verification link has expired. Please register again.')
+
+        # Mark email as verified
+        user.email_verified = 1
+        user.verification_token = None
+        user.verification_token_expires = None
+        db_session.commit()
+
+        # Store user ID in session for 2FA setup
+        session['pending_2fa_setup_user_id'] = str(user.id)
+        session['pending_2fa_setup_email'] = user.email
+        session['pending_2fa_setup_name'] = user.name
+
+        # Redirect to 2FA setup (mandatory)
+        return redirect(url_for('setup_2fa_after_verify'))
+
+
+@app.route('/setup-2fa-required', methods=['GET', 'POST'])
+def setup_2fa_after_verify():
+    """Mandatory 2FA setup after email verification."""
+    if 'pending_2fa_setup_user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['pending_2fa_setup_user_id']
+    user_email = session.get('pending_2fa_setup_email', '')
+    user_name = session.get('pending_2fa_setup_name', '')
+
+    with DatabaseSession() as db_session:
+        user = db_session.query(User).filter(User.id == user_id).first()
+        if not user:
+            session.pop('pending_2fa_setup_user_id', None)
+            return redirect(url_for('login'))
+
+        if request.method == 'POST':
+            code = request.form.get('code', '').strip()
+            secret = request.form.get('secret', '')
+
+            # Verify the code before enabling
+            totp = pyotp.TOTP(secret)
+            if totp.verify(code, valid_window=1):
+                user.totp_secret = secret
+                user.totp_enabled = 1
+                db_session.commit()
+
+                # Clear pending session
+                session.pop('pending_2fa_setup_user_id', None)
+                session.pop('pending_2fa_setup_email', None)
+                session.pop('pending_2fa_setup_name', None)
+
+                # Complete login
+                session.permanent = True
+                session['user_id'] = str(user.id)
+                session['user_name'] = user.name
+                session['user_email'] = user.email
+
+                return redirect(url_for('chat'))
+            else:
+                # Regenerate QR for retry
+                provisioning_uri = totp.provisioning_uri(
+                    name=user.email,
+                    issuer_name="MV Internal"
+                )
+                qr_data = generate_qr_base64(provisioning_uri)
+                return render_template('setup_2fa.html',
+                    secret=secret,
+                    qr_code=qr_data,
+                    user_name=user_name,
+                    mandatory=True,
+                    error='Invalid code. Please try again.')
+
+        # Generate new secret
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=user.email,
+            issuer_name="MV Internal"
+        )
+
+        # Generate QR code as base64
+        qr_data = generate_qr_base64(provisioning_uri)
+
+        return render_template('setup_2fa.html',
+            secret=secret,
+            qr_code=qr_data,
+            user_name=user_name,
+            mandatory=True,
+            email_just_verified=True)
 
 
 # ============================================================================
