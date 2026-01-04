@@ -685,14 +685,14 @@
             </svg>
             Chats
         </a>
-        <div class="sidebar-section-header" id="projectsHeader">
+        <div class="sidebar-section-header" id="projectsHeader" onclick="window.location.href='/chat?view=projects'">
             <div class="sidebar-section-header-left">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
                 Projects
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleProjectsSection(event)">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="event.stopPropagation(); toggleProjectsSection(event)">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
@@ -701,7 +701,7 @@
                 <!-- Projects loaded dynamically -->
             </div>
         </div>
-        <div class="sidebar-section-header expanded" id="libraryHeader">
+        <div class="sidebar-section-header expanded" id="libraryHeader" onclick="window.location.href='/chat?view=library'">
             <div class="sidebar-section-header-left">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -709,7 +709,7 @@
                 </svg>
                 Library
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleLibrarySection(event)">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="event.stopPropagation(); toggleLibrarySection(event)">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>

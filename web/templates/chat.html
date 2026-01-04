@@ -3070,14 +3070,14 @@
             </svg>
             Chats
         </div>
-        <div class="sidebar-section-header expanded" id="projectsNavItem">
-            <div class="sidebar-section-header-left" onclick="showProjectsListView()">
+        <div class="sidebar-section-header expanded" id="projectsNavItem" onclick="showProjectsListView()">
+            <div class="sidebar-section-header-left">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
                 Projects
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleProjectsSection()">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="event.stopPropagation(); toggleProjectsSection()">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
@@ -3092,15 +3092,15 @@
                 Create project
             </button>
         </div>
-        <div class="sidebar-section-header expanded" id="libraryNavItem">
-            <div class="sidebar-section-header-left" onclick="showLibraryListView()">
+        <div class="sidebar-section-header expanded" id="libraryNavItem" onclick="showLibraryListView()">
+            <div class="sidebar-section-header-left">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                 </svg>
                 Library
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleLibrarySection()">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="event.stopPropagation(); toggleLibrarySection()">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
@@ -3512,6 +3512,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConversations();
     loadProjects();
     loadLibraryCounts();
+
+    // Handle view query parameter from library pages
+    const urlParams = new URLSearchParams(window.location.search);
+    const view = urlParams.get('view');
+    if (view === 'projects') {
+        showProjectsListView();
+    } else if (view === 'library') {
+        showLibraryListView();
+    }
 });
 
 // Hide all list views and chat
