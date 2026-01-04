@@ -567,8 +567,7 @@
         font-size: 0.75rem;
         font-weight: 500;
         color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.02em;
         margin-bottom: 0.5rem;
     }
 
@@ -1020,13 +1019,16 @@ function renderConversations() {
     const list = document.getElementById('conversationsList');
     if (!list) return;
 
-    if (conversations.length === 0) {
+    // Filter out empty chats (message_count === 0)
+    const nonEmptyConversations = conversations.filter(c => c.message_count > 0);
+
+    if (nonEmptyConversations.length === 0) {
         list.innerHTML = '<div style="padding: 0.5rem 1rem; font-size: 0.75rem; color: #888;">No recent chats</div>';
         return;
     }
 
     // Show last 10 conversations
-    const recent = conversations.slice(0, 10);
+    const recent = nonEmptyConversations.slice(0, 10);
     list.innerHTML = recent.map(conv => `
         <a href="/chat?conversation=${conv.id}" class="conversation-item">
             <div class="conversation-title">${escapeHtml(conv.title)}</div>
@@ -1087,9 +1089,12 @@ function renderProject() {
 
     html += '<div class="section-title">Conversations</div>';
 
-    if (currentProject.conversations && currentProject.conversations.length > 0) {
+    // Filter out empty conversations (message_count === 0)
+    const projectConversations = (currentProject.conversations || []).filter(c => c.message_count > 0);
+
+    if (projectConversations.length > 0) {
         html += '<div class="conversations-grid">';
-        currentProject.conversations.forEach(conv => {
+        projectConversations.forEach(conv => {
             html += `
                 <div class="conversation-card" onclick="openConversation('${conv.id}')">
                     <div class="conversation-card-title">${escapeHtml(conv.title)}</div>
