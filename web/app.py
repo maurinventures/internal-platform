@@ -284,6 +284,62 @@ def videos():
     return render_template('videos.html', videos=video_list, search_query=search_query)
 
 
+@app.route('/audio')
+def audio():
+    """List all audio recordings."""
+    search_query = request.args.get('q', '').strip()
+
+    with DatabaseSession() as session:
+        query = session.query(AudioRecording)
+
+        if search_query:
+            search_filter = f'%{search_query}%'
+            query = query.filter(
+                (AudioRecording.title.ilike(search_filter)) |
+                (AudioRecording.filename.ilike(search_filter)) |
+                (AudioRecording.source.ilike(search_filter))
+            )
+
+        recordings = query.order_by(AudioRecording.created_at.desc()).all()
+        audio_list = []
+        for a in recordings:
+            # Count segments for this recording
+            segment_count = session.query(AudioSegment).filter(
+                AudioSegment.audio_id == a.id
+            ).count()
+            audio_list.append({
+                'id': str(a.id),
+                'filename': a.filename,
+                'title': a.title,
+                'duration': float(a.duration_seconds) if a.duration_seconds else None,
+                'recording_date': a.recording_date,
+                'source': a.source,
+                'created_at': a.created_at,
+                'segment_count': segment_count,
+                's3_key': a.s3_key,
+            })
+
+    return render_template('audio.html', recordings=audio_list, search_query=search_query)
+
+
+@app.route('/api/audio')
+def api_audio_list():
+    """API endpoint to list all audio recordings."""
+    with DatabaseSession() as session:
+        recordings = session.query(AudioRecording).order_by(AudioRecording.created_at.desc()).all()
+        return jsonify({
+            'recordings': [{
+                'id': str(a.id),
+                'filename': a.filename,
+                'title': a.title,
+                'duration': float(a.duration_seconds) if a.duration_seconds else None,
+                'recording_date': a.recording_date.isoformat() if a.recording_date else None,
+                'source': a.source,
+                'created_at': a.created_at.isoformat() if a.created_at else None,
+            } for a in recordings]
+        })
+
+
 @app.route('/transcripts')
 def transcripts():
     """List all transcripts."""
