@@ -4263,8 +4263,8 @@ async function loadConversations() {
         } else if (projectParam) {
             // Create new conversation in project
             await createNewConversation(projectParam);
-        } else {
-            // Default: show welcome screen with new chat
+        } else if (!isChatsListViewActive && !isProjectsListViewActive && !isLibraryListViewActive) {
+            // Default: show welcome screen with new chat (only if not showing a list view)
             await createNewConversation();
         }
     } catch (e) {
