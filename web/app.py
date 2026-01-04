@@ -3711,5 +3711,65 @@ def api_get_video(video_id):
         return jsonify({'error': str(e)}), 500
 
 
+# Admin emails authorized to invite users
+ADMIN_EMAILS = ['joseph@maurinventures.com']
+
+
+@app.route('/admin/invite', methods=['GET', 'POST'])
+def admin_invite():
+    """Admin page to invite new users."""
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    # Check if user is admin
+    if session.get('user_email') not in ADMIN_EMAILS:
+        return redirect(url_for('chat'))
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+
+        if not name or not email:
+            return render_template('admin_invite.html', error='Name and email are required')
+
+        # Validate email format
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return render_template('admin_invite.html', error='Invalid email format')
+
+        with DatabaseSession() as db_session:
+            # Check if email already exists
+            existing = db_session.query(User).filter(User.email == email).first()
+            if existing:
+                return render_template('admin_invite.html', error='Email already registered')
+
+            # Generate a random password
+            password = secrets.token_urlsafe(12)
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+            # Create user (email verified since invited by admin)
+            user = User(
+                name=name,
+                email=email,
+                password_hash=password_hash,
+                email_verified=1,  # Pre-verified since invited by admin
+                is_active=1
+            )
+            db_session.add(user)
+            db_session.commit()
+
+            # Send invite email
+            if send_invite_email(email, name, password):
+                return render_template('admin_invite.html',
+                    success=True,
+                    message=f'Invitation sent to {email}')
+            else:
+                return render_template('admin_invite.html',
+                    success=True,
+                    message=f'User created but email failed. Password: {password}')
+
+    return render_template('admin_invite.html')
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
