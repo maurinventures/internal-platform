@@ -1097,6 +1097,104 @@
         display: none;
     }
 
+    /* Library List View */
+    .library-list-view {
+        flex: 1;
+        padding: 2rem;
+        max-width: 900px;
+        width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        display: none;
+    }
+
+    .library-list-view.active {
+        display: block;
+    }
+
+    .library-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+    }
+
+    .library-list-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+
+    .library-count-row {
+        margin-bottom: 1.5rem;
+        font-size: 0.875rem;
+        color: #666;
+    }
+
+    .library-categories {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border-top: 1px solid #e5e4df;
+    }
+
+    .library-category-item {
+        display: flex;
+        align-items: center;
+        padding: 1.25rem 0;
+        border-bottom: 1px solid #e5e4df;
+        cursor: pointer;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.15s;
+    }
+
+    .library-category-item:hover {
+        background: #f9f9f7;
+        margin: 0 -1rem;
+        padding: 1.25rem 1rem;
+    }
+
+    .library-category-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .library-category-icon svg {
+        width: 20px;
+        height: 20px;
+        color: white;
+    }
+
+    .library-category-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .library-category-title {
+        font-size: 1rem;
+        font-weight: 500;
+        color: #1a1a1a;
+        margin-bottom: 0.25rem;
+    }
+
+    .library-category-desc {
+        font-size: 0.8125rem;
+        color: #888;
+    }
+
+    .library-category-count {
+        font-size: 0.875rem;
+        color: #888;
+        margin-left: 1rem;
+    }
+
     .message {
         margin-bottom: 1.5rem;
     }
@@ -2992,15 +3090,15 @@
                 Create project
             </button>
         </div>
-        <div class="sidebar-section-header expanded" onclick="toggleLibrarySection()">
-            <div class="sidebar-section-header-left">
+        <div class="sidebar-section-header expanded" id="libraryNavItem">
+            <div class="sidebar-section-header-left" onclick="showLibraryListView()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                 </svg>
                 Library
             </div>
-            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleLibrarySection()">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
@@ -3011,6 +3109,14 @@
                     <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                 </svg>
                 Videos
+            </a>
+            <a href="/audio" class="sidebar-nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <circle cx="18" cy="16" r="3"/>
+                </svg>
+                Audio
             </a>
             <a href="/transcripts" class="sidebar-nav-item">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3236,6 +3342,71 @@
         </div>
     </div>
 
+    <!-- Library List View -->
+    <div class="library-list-view" id="libraryListView">
+        <div class="library-list-header">
+            <h1 class="library-list-title">Library</h1>
+        </div>
+        <div class="library-count-row">
+            <span id="libraryCount">4 categories in your library</span>
+        </div>
+        <div class="library-categories">
+            <a href="/videos" class="library-category-item">
+                <div class="library-category-icon" style="background: #3b82f6">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                </div>
+                <div class="library-category-content">
+                    <div class="library-category-title">Videos</div>
+                    <div class="library-category-desc">Source videos and footage</div>
+                </div>
+                <span class="library-category-count" id="videosCount"></span>
+            </a>
+            <a href="/audio" class="library-category-item">
+                <div class="library-category-icon" style="background: #8b5cf6">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18V5l12-2v13"/>
+                        <circle cx="6" cy="18" r="3"/>
+                        <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                </div>
+                <div class="library-category-content">
+                    <div class="library-category-title">Audio</div>
+                    <div class="library-category-desc">Audio recordings and clips</div>
+                </div>
+                <span class="library-category-count" id="audioCount"></span>
+            </a>
+            <a href="/transcripts" class="library-category-item">
+                <div class="library-category-icon" style="background: #10b981">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                    </svg>
+                </div>
+                <div class="library-category-content">
+                    <div class="library-category-title">Transcripts</div>
+                    <div class="library-category-desc">Video and audio transcriptions</div>
+                </div>
+                <span class="library-category-count" id="transcriptsCount"></span>
+            </a>
+            <a href="/personas" class="library-category-item">
+                <div class="library-category-icon" style="background: #f59e0b">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <div class="library-category-content">
+                    <div class="library-category-title">Personas</div>
+                    <div class="library-category-desc">AI voices for content generation</div>
+                </div>
+                <span class="library-category-count" id="personasCount"></span>
+            </a>
+        </div>
+    </div>
+
     <div class="chat-messages" id="chatMessages">
         <div class="message-assistant">
             <div class="message-body">
@@ -3327,6 +3498,7 @@ let conversations = [];
 // View state
 let isChatsListViewActive = false;
 let isProjectsListViewActive = false;
+let isLibraryListViewActive = false;
 let isSelectMode = false;
 let isProjectsSelectMode = false;
 let selectedChats = new Set();
@@ -3337,18 +3509,21 @@ let projects = [];
 document.addEventListener('DOMContentLoaded', () => {
     loadConversations();
     loadProjects();
+    loadLibraryCounts();
 });
 
 // Hide all list views and chat
 function hideAllViews() {
     document.getElementById('chatsListView').classList.remove('active');
     document.getElementById('projectsListView').classList.remove('active');
+    document.getElementById('libraryListView').classList.remove('active');
     document.getElementById('chatMessages').style.display = 'none';
     document.querySelector('.input-area').style.display = 'none';
     document.querySelector('.chat-header').style.display = 'none';
     document.getElementById('chatsNavItem').classList.remove('active');
     isChatsListViewActive = false;
     isProjectsListViewActive = false;
+    isLibraryListViewActive = false;
 }
 
 // Chats List View Functions
@@ -3358,6 +3533,63 @@ function showChatsListView() {
     document.getElementById('chatsListView').classList.add('active');
     document.getElementById('chatsNavItem').classList.add('active');
     renderChatsList();
+}
+
+// Library List View Functions
+function showLibraryListView() {
+    hideAllViews();
+    isLibraryListViewActive = true;
+    document.getElementById('libraryListView').classList.add('active');
+}
+
+async function loadLibraryCounts() {
+    try {
+        // Load video count
+        const videosRes = await fetch('/api/videos');
+        if (videosRes.ok) {
+            const videos = await videosRes.json();
+            const count = Array.isArray(videos) ? videos.length : (videos.videos?.length || 0);
+            document.getElementById('videosCount').textContent = count + ' items';
+        }
+    } catch (e) {
+        console.error('Failed to load video count:', e);
+    }
+
+    try {
+        // Load audio count
+        const audioRes = await fetch('/api/audio');
+        if (audioRes.ok) {
+            const audio = await audioRes.json();
+            const count = Array.isArray(audio) ? audio.length : (audio.recordings?.length || 0);
+            document.getElementById('audioCount').textContent = count + ' items';
+        }
+    } catch (e) {
+        document.getElementById('audioCount').textContent = '';
+    }
+
+    try {
+        // Load transcript count
+        const transcriptsRes = await fetch('/api/transcripts');
+        if (transcriptsRes.ok) {
+            const transcripts = await transcriptsRes.json();
+            const count = Array.isArray(transcripts) ? transcripts.length : (transcripts.transcripts?.length || 0);
+            document.getElementById('transcriptsCount').textContent = count + ' items';
+        }
+    } catch (e) {
+        console.error('Failed to load transcript count:', e);
+    }
+
+    try {
+        // Load persona count
+        const personasRes = await fetch('/api/personas');
+        if (personasRes.ok) {
+            const personas = await personasRes.json();
+            const count = Array.isArray(personas) ? personas.length : 0;
+            document.getElementById('personasCount').textContent = count + ' items';
+        }
+    } catch (e) {
+        console.error('Failed to load persona count:', e);
+    }
 }
 
 // Projects List View Functions
