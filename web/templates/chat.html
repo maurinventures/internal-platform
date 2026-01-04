@@ -4018,8 +4018,9 @@ function renderChatsList() {
     const chatsList = document.getElementById('chatsList');
     const searchTerm = document.getElementById('chatsSearch').value.toLowerCase();
 
+    // Filter out empty chats (message_count === 0) and apply search
     const filteredChats = conversations.filter(conv =>
-        conv.title.toLowerCase().includes(searchTerm)
+        conv.message_count > 0 && conv.title.toLowerCase().includes(searchTerm)
     );
 
     document.getElementById('chatsCount').textContent = `${filteredChats.length} chat${filteredChats.length !== 1 ? 's' : ''} with MV Internal`;
@@ -4174,11 +4175,12 @@ async function loadConversations() {
 }
 
 function renderConversations() {
-    // Group conversations by project
+    // Group conversations by project - filter out empty chats (message_count === 0)
+    // Empty chats are not shown in sidebar until first message is sent
     const projectGroups = {};
     const ungrouped = [];
 
-    conversations.forEach(conv => {
+    conversations.filter(conv => conv.message_count > 0).forEach(conv => {
         if (conv.project) {
             if (!projectGroups[conv.project.id]) {
                 projectGroups[conv.project.id] = {
@@ -4268,8 +4270,14 @@ function formatDate(dateStr) {
 
 async function createNewConversation(projectId = null) {
     // Check for existing empty chat (no messages) to reuse
-    const emptyChat = conversations.find(c => c.message_count === 0);
-    if (emptyChat && !projectId) {
+    // If creating a project chat, look for empty chat in that specific project
+    // If creating a regular chat, look for any empty chat without a project
+    const emptyChat = conversations.find(c =>
+        c.message_count === 0 &&
+        (projectId ? c.project_id === projectId : !c.project_id)
+    );
+
+    if (emptyChat) {
         // Reuse existing empty chat
         currentConversationId = emptyChat.id;
         currentProjectId = emptyChat.project_id || null;
