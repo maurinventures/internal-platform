@@ -474,6 +474,9 @@ const Chat = {
             case 'screenshot':
                 showToast('Screenshot feature coming soon', 'info');
                 break;
+            case 'add-to-project':
+                showToast('Project selection coming soon', 'info');
+                break;
             case 'research':
                 this.elements.input.value = '/research ';
                 this.elements.input.focus();
