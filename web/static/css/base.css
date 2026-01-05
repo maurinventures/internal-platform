@@ -247,15 +247,7 @@ a:hover {
     line-height: initial !important;
 }
 
-/* Center content in collapsed sidebar */
-.sidebar.collapsed .new-chat-btn,
-.sidebar.collapsed .sidebar-nav-item,
-.sidebar.collapsed .sidebar-section-header {
-    justify-content: center !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    text-align: center !important;
-}
+/* Center content in collapsed sidebar - only for visible elements */
 
 /* Hide divider and other elements completely */
 .sidebar.collapsed .sidebar-divider,
@@ -263,10 +255,13 @@ a:hover {
     display: none !important;
 }
 
-/* Hide sections when collapsed */
+/* Hide ALL navigation and sections when collapsed - keep ONLY toggle and J circle */
 .sidebar.collapsed .conversations-list,
 .sidebar.collapsed .sidebar-section-items,
-.sidebar.collapsed .sidebar-section {
+.sidebar.collapsed .sidebar-section,
+.sidebar.collapsed .new-chat-btn,
+.sidebar.collapsed .sidebar-nav,
+.sidebar.collapsed .sidebar-nav-item {
     display: none !important;
 }
 
