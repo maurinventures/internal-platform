@@ -171,7 +171,7 @@ a:hover {
 /* Sidebar typography hierarchy */
 
 /* Claude logo/brand (28px, 1.2 line-height, 600 weight) */
-.sidebar-logo {
+.sidebar .sidebar-logo {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-size: 28px !important;
     line-height: 1.2 !important;
@@ -179,9 +179,9 @@ a:hover {
 }
 
 /* Navigation items - main nav and new chat button (16px, 1.5 line-height, 400 weight) */
-.sidebar-nav-item,
-.new-chat-btn,
-.sidebar-section-header {
+.sidebar .sidebar-nav-item,
+.sidebar .new-chat-btn,
+.sidebar .sidebar-section-header {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-size: 16px !important;
     line-height: 1.5 !important;
@@ -189,7 +189,7 @@ a:hover {
 }
 
 /* Recents section label (12px, 1.4 line-height, 500 weight) */
-.sidebar-section-title {
+.sidebar .sidebar-section-title {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-size: 12px !important;
     line-height: 1.4 !important;
@@ -197,11 +197,27 @@ a:hover {
 }
 
 /* Chat history items (14px, 1.6 line-height, 400 weight) */
-.conversation-item,
-.conversation-title,
-.recents-project-name {
+.sidebar .conversation-item,
+.sidebar .conversation-title,
+.sidebar .recents-project-name {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-size: 14px !important;
     line-height: 1.6 !important;
     font-weight: 400 !important;
+}
+
+/* Sidebar toggle icon styling (user requested) */
+.sidebar-toggle svg,
+.sidebar-toggle-floating svg {
+    width: 20px !important;
+    height: 20px !important;
+    flex-shrink: 0;
+    color: var(--color-text-muted) !important;
+    transition: all 0.3s ease !important;
+}
+
+/* On parent hover */
+.sidebar-toggle:hover svg,
+.sidebar-toggle-floating:hover svg {
+    color: var(--color-text) !important;
 }
