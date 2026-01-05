@@ -193,9 +193,328 @@ function renderConversationsGrouped(conversations, containerId = 'conversationsL
 }
 
 // ============================================
+// Chat Interface (Claude.ai style)
+// ============================================
+
+const Chat = {
+    conversationId: null,
+    selectedModel: 'sonnet-4',
+    isLoading: false,
+
+    elements: {},
+
+    init() {
+        // Cache DOM elements
+        this.elements = {
+            welcome: document.getElementById('chatWelcome'),
+            greeting: document.getElementById('welcomeGreeting'),
+            messages: document.getElementById('chatMessages'),
+            input: document.getElementById('chatInput'),
+            inputBox: document.getElementById('chatInputBox'),
+            sendBtn: document.getElementById('sendBtn'),
+            attachBtn: document.getElementById('attachBtn'),
+            attachDropdown: document.getElementById('attachDropdown'),
+            modelSelectorBtn: document.getElementById('modelSelectorBtn'),
+            modelDropdown: document.getElementById('modelDropdown'),
+            modelName: document.querySelector('.model-name'),
+            quickActions: document.getElementById('quickActions'),
+            page: document.querySelector('.chat-page')
+        };
+
+        if (!this.elements.input) return;
+
+        this.setGreeting();
+        this.bindEvents();
+        this.checkExistingChat();
+
+        console.log('Chat initialized');
+    },
+
+    setGreeting() {
+        const hour = new Date().getHours();
+        let greeting;
+
+        if (hour < 12) {
+            greeting = 'Good morning, Joy';
+        } else if (hour < 17) {
+            greeting = 'Good afternoon, Joy';
+        } else if (hour < 21) {
+            greeting = 'Good evening, Joy';
+        } else {
+            greeting = 'Coffee and Claude time?';
+        }
+
+        if (this.elements.greeting) {
+            this.elements.greeting.textContent = greeting;
+        }
+    },
+
+    bindEvents() {
+        // Send button
+        this.elements.sendBtn.addEventListener('click', () => this.send());
+
+        // Enter to send (Shift+Enter for newline)
+        this.elements.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.send();
+            }
+        });
+
+        // Input changes
+        this.elements.input.addEventListener('input', () => {
+            this.autoResize();
+            this.elements.sendBtn.disabled = !this.elements.input.value.trim();
+        });
+
+        // Attachment menu
+        this.elements.attachBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleDropdown('attachDropdown');
+        });
+
+        // Model selector
+        this.elements.modelSelectorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleDropdown('modelDropdown');
+        });
+
+        // Model options
+        document.querySelectorAll('.model-option[data-model]').forEach(btn => {
+            btn.addEventListener('click', () => this.selectModel(btn.dataset.model));
+        });
+
+        // Quick action chips
+        document.querySelectorAll('.quick-action-chip').forEach(btn => {
+            btn.addEventListener('click', () => this.handleQuickAction(btn.dataset.action));
+        });
+
+        // Attach options
+        document.querySelectorAll('.attach-option').forEach(btn => {
+            btn.addEventListener('click', () => this.handleAttachOption(btn.dataset.action));
+        });
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            this.closeAllDropdowns();
+        });
+    },
+
+    autoResize() {
+        const input = this.elements.input;
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+    },
+
+    toggleDropdown(id) {
+        const dropdown = document.getElementById(id);
+        const isOpen = dropdown.classList.contains('open');
+
+        this.closeAllDropdowns();
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+        }
+    },
+
+    closeAllDropdowns() {
+        document.querySelectorAll('.model-dropdown, .attach-dropdown').forEach(d => {
+            d.classList.remove('open');
+        });
+    },
+
+    selectModel(model) {
+        this.selectedModel = model;
+
+        // Update button text
+        const names = {
+            'opus-4.5': 'Opus 4.5',
+            'sonnet-4': 'Sonnet 4',
+            'haiku-4.5': 'Haiku 4.5'
+        };
+        this.elements.modelName.textContent = names[model] || model;
+
+        // Update selected state
+        document.querySelectorAll('.model-option').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.model === model);
+        });
+
+        this.closeAllDropdowns();
+    },
+
+    handleQuickAction(action) {
+        const prompts = {
+            'write': 'Help me write ',
+            'learn': 'Explain ',
+            'code': 'Write code to ',
+            'life-stuff': 'Help me with ',
+            'claude-choice': ''
+        };
+
+        if (prompts[action] !== undefined) {
+            this.elements.input.value = prompts[action];
+            this.elements.input.focus();
+            this.autoResize();
+            this.elements.sendBtn.disabled = !this.elements.input.value.trim();
+        }
+    },
+
+    handleAttachOption(action) {
+        this.closeAllDropdowns();
+
+        switch (action) {
+            case 'add-files':
+                this.openFilePicker();
+                break;
+            case 'screenshot':
+                showToast('Screenshot feature coming soon', 'info');
+                break;
+            case 'research':
+                this.elements.input.value = '/research ';
+                this.elements.input.focus();
+                break;
+            case 'web-search':
+                // Toggle web search
+                break;
+            default:
+                console.log('Action:', action);
+        }
+    },
+
+    openFilePicker() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,.pdf,.doc,.docx,.txt,.csv';
+        input.multiple = true;
+        input.onchange = (e) => {
+            const files = Array.from(e.target.files);
+            console.log('Files selected:', files.map(f => f.name));
+            // TODO: Handle file upload
+        };
+        input.click();
+    },
+
+    async send() {
+        const message = this.elements.input.value.trim();
+        if (!message || this.isLoading) return;
+
+        this.isLoading = true;
+        this.elements.sendBtn.disabled = true;
+
+        // Switch to chat mode
+        this.elements.page.classList.add('has-messages');
+
+        // Add user message
+        this.addMessage('user', message);
+
+        // Clear input
+        this.elements.input.value = '';
+        this.autoResize();
+
+        // Add loading message
+        const loadingId = this.addMessage('assistant', '', true);
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message,
+                    conversation_id: this.conversationId,
+                    model: this.selectedModel
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to send');
+
+            const data = await response.json();
+
+            // Remove loading, add response
+            this.removeMessage(loadingId);
+            this.addMessage('assistant', data.response);
+
+            // Update conversation ID
+            if (data.conversation_id && !this.conversationId) {
+                this.conversationId = data.conversation_id;
+                history.pushState({}, '', `/chat/${data.conversation_id}`);
+            }
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            this.removeMessage(loadingId);
+            this.addMessage('error', 'Failed to send message. Please try again.');
+        } finally {
+            this.isLoading = false;
+            this.elements.sendBtn.disabled = !this.elements.input.value.trim();
+        }
+    },
+
+    addMessage(role, content, isLoading = false) {
+        const id = 'msg-' + Date.now();
+        const div = document.createElement('div');
+        div.id = id;
+        div.className = `message message-${role}${isLoading ? ' loading' : ''}`;
+
+        div.innerHTML = `
+            <div class="message-content">
+                ${isLoading ? '<div class="typing-dots"><span></span><span></span><span></span></div>' : this.formatContent(content)}
+            </div>
+        `;
+
+        this.elements.messages.appendChild(div);
+        this.elements.messages.scrollTop = this.elements.messages.scrollHeight;
+
+        return id;
+    },
+
+    removeMessage(id) {
+        document.getElementById(id)?.remove();
+    },
+
+    formatContent(content) {
+        // Basic formatting - escape HTML and convert newlines
+        return content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+    },
+
+    checkExistingChat() {
+        const match = window.location.pathname.match(/\/chat\/([a-f0-9-]+)/);
+        if (match) {
+            this.conversationId = match[1];
+            this.loadChat();
+        }
+    },
+
+    async loadChat() {
+        try {
+            const response = await fetch(`/api/chat/${this.conversationId}`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            this.elements.page.classList.add('has-messages');
+
+            data.messages.forEach(msg => {
+                this.addMessage(msg.role, msg.content);
+            });
+        } catch (error) {
+            console.error('Failed to load chat:', error);
+        }
+    }
+};
+
+// ============================================
 // Auto-initialize on DOM ready
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
     restoreSidebarState();
+
+    // Initialize Chat interface if on chat page
+    if (document.querySelector('.chat-page')) {
+        Chat.init();
+    }
 });
