@@ -65,6 +65,111 @@ function toggleLibrarySection() {
 }
 
 /**
+ * Toggle user menu dropdown
+ * @param {Event} event - The click event
+ */
+function toggleUserMenu(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('userMenuDropdown');
+    if (dropdown) dropdown.classList.toggle('active');
+}
+
+/**
+ * Load a conversation by ID
+ * @param {string} conversationId - UUID of the conversation
+ */
+function loadConversation(conversationId) {
+    window.location.href = `/chat?conversation=${conversationId}`;
+}
+
+/**
+ * Open chat menu for a conversation item
+ * @param {Event} event - The click event
+ * @param {string} conversationId - UUID of the conversation
+ * @param {string} title - Title of the conversation
+ */
+function openChatMenu(event, conversationId, title) {
+    if (event) event.stopPropagation();
+
+    // Close existing menus
+    document.querySelectorAll('.chat-item-dropdown').forEach(menu => menu.remove());
+
+    // Create dropdown menu
+    const dropdown = document.createElement('div');
+    dropdown.className = 'chat-item-dropdown';
+    dropdown.innerHTML = `
+        <button class="chat-menu-item" data-action="star-conversation" data-conversation-id="${conversationId}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
+            </svg>
+            Star chat
+        </button>
+        <button class="chat-menu-item danger" data-action="delete-conversation" data-conversation-id="${conversationId}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3,6 5,6 21,6"></polyline>
+                <path d="m19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2,2h4a2,2,0,0,1,2,2v2"></path>
+            </svg>
+            Delete chat
+        </button>
+    `;
+
+    // Position dropdown
+    const rect = event.target.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = rect.bottom + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.zIndex = '1000';
+
+    document.body.appendChild(dropdown);
+
+    // Close dropdown when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeDropdown() {
+            dropdown.remove();
+            document.removeEventListener('click', closeDropdown);
+        });
+    }, 0);
+}
+
+/**
+ * Star/unstar a conversation
+ * @param {string} conversationId - UUID of the conversation
+ */
+async function starConversation(conversationId) {
+    try {
+        const response = await fetch(`/api/conversations/${conversationId}/star`, {
+            method: 'POST'
+        });
+        if (response.ok) {
+            showToast('Chat starred', 'success');
+            location.reload(); // Refresh to update sidebar
+        }
+    } catch (error) {
+        showToast('Failed to star chat', 'error');
+    }
+}
+
+/**
+ * Delete a conversation
+ * @param {string} conversationId - UUID of the conversation
+ */
+async function deleteConversation(conversationId) {
+    if (!confirm('Are you sure you want to delete this chat?')) return;
+
+    try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            showToast('Chat deleted', 'success');
+            location.reload(); // Refresh to update sidebar
+        }
+    } catch (error) {
+        showToast('Failed to delete chat', 'error');
+    }
+}
+
+/**
  * Restore sidebar state from localStorage
  * Call this on DOMContentLoaded
  */
@@ -507,11 +612,264 @@ const Chat = {
 };
 
 // ============================================
+// Event Delegation System
+// ============================================
+
+/**
+ * Set up event delegation for all interactive elements
+ * This replaces onclick handlers with proper event delegation
+ */
+function setupEventDelegation() {
+    document.addEventListener('click', function(event) {
+        const target = event.target.closest('[data-action]');
+        if (!target) return;
+
+        const action = target.dataset.action;
+        const params = target.dataset;
+
+        switch (action) {
+            case 'toggle-sidebar':
+                toggleSidebar();
+                break;
+
+            case 'toggle-library':
+                toggleLibrarySection();
+                break;
+
+            case 'toggle-recents-project':
+                toggleRecentsProject(params.projectId);
+                break;
+
+            case 'load-conversation':
+                loadConversation(params.conversationId);
+                break;
+
+            case 'open-chat-menu':
+                event.stopPropagation();
+                openChatMenu(event, params.conversationId, params.title);
+                break;
+
+            case 'toggle-user-menu':
+                toggleUserMenu(event);
+                break;
+
+            case 'star-conversation':
+                starConversation(params.conversationId);
+                break;
+
+            case 'delete-conversation':
+                deleteConversation(params.conversationId);
+                break;
+
+            case 'toggle-dropdown':
+                event.stopPropagation();
+                toggleGenericDropdown(params.targetId);
+                break;
+
+            case 'close-modal':
+                closeModal(event);
+                break;
+
+            case 'share-chat':
+                shareChat();
+                break;
+
+            case 'go-to-project':
+                goToProject(event);
+                break;
+
+            case 'toggle-select-mode':
+                toggleSelectMode();
+                break;
+
+            case 'delete-selected-chats':
+                deleteSelectedChats();
+                break;
+
+            case 'open-chat-from-list':
+                openChatFromList(params.conversationId);
+                break;
+
+            case 'toggle-chat-selection':
+                event.stopPropagation();
+                toggleChatSelection(params.conversationId);
+                break;
+
+            case 'close-share-modal':
+                closeShareModal(event);
+                break;
+
+            default:
+                console.log('Unknown action:', action);
+        }
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(event) {
+        // Close user menu if clicking outside
+        if (!event.target.closest('.sidebar-footer')) {
+            const userMenu = document.getElementById('userMenuDropdown');
+            if (userMenu) userMenu.classList.remove('active');
+        }
+
+        // Close any open chat menus
+        if (!event.target.closest('.chat-item-dropdown')) {
+            document.querySelectorAll('.chat-item-dropdown').forEach(menu => menu.remove());
+        }
+
+        // Close any dropdowns with 'active' class
+        if (!event.target.closest('.dropdown')) {
+            document.querySelectorAll('.dropdown-menu.active').forEach(menu => {
+                menu.classList.remove('active');
+            });
+        }
+    });
+}
+
+/**
+ * Toggle generic dropdown by ID
+ * @param {string} targetId - ID of dropdown to toggle
+ */
+function toggleGenericDropdown(targetId) {
+    const dropdown = document.getElementById(targetId);
+    if (dropdown) dropdown.classList.toggle('active');
+}
+
+// ============================================
+// Chat Page Functions
+// ============================================
+
+/**
+ * Close modal by clicking outside
+ * @param {Event} event - The click event
+ */
+function closeModal(event) {
+    if (event.target === event.currentTarget) {
+        event.currentTarget.style.display = 'none';
+    }
+}
+
+/**
+ * Share current chat
+ */
+function shareChat() {
+    const modal = document.getElementById('shareModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const searchInput = document.getElementById('userSearch');
+        if (searchInput) searchInput.focus();
+    }
+}
+
+/**
+ * Go to project page from chat
+ * @param {Event} event - The click event
+ */
+function goToProject(event) {
+    if (event) event.preventDefault();
+    const projectId = event.target.closest('[data-project-id]')?.dataset.projectId;
+    if (projectId) {
+        window.location.href = `/project/${projectId}`;
+    }
+}
+
+/**
+ * Toggle chat selection mode
+ */
+function toggleSelectMode() {
+    const selectActions = document.querySelector('.chats-select-actions');
+    const selectBtn = document.querySelector('.chats-select-btn');
+    const countRow = document.querySelector('.chats-count-row');
+
+    if (selectActions && selectBtn && countRow) {
+        const isVisible = selectActions.style.display === 'flex';
+        selectActions.style.display = isVisible ? 'none' : 'flex';
+        selectBtn.style.display = isVisible ? 'block' : 'none';
+        countRow.style.display = isVisible ? 'flex' : 'none';
+
+        // Clear selections if exiting select mode
+        if (isVisible) {
+            document.querySelectorAll('.chat-list-checkbox').forEach(cb => cb.checked = false);
+            updateSelectCount();
+        }
+    }
+}
+
+/**
+ * Delete selected chats
+ */
+async function deleteSelectedChats() {
+    const selectedCheckboxes = document.querySelectorAll('.chat-list-checkbox:checked');
+    const chatIds = Array.from(selectedCheckboxes).map(cb => cb.closest('[data-id]')?.dataset.id).filter(Boolean);
+
+    if (chatIds.length === 0) return;
+
+    if (!confirm(`Delete ${chatIds.length} chat${chatIds.length > 1 ? 's' : ''}?`)) return;
+
+    try {
+        const promises = chatIds.map(id =>
+            fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+        );
+
+        await Promise.all(promises);
+        showToast(`${chatIds.length} chat${chatIds.length > 1 ? 's' : ''} deleted`, 'success');
+
+        // Reload the page to refresh the list
+        window.location.reload();
+    } catch (error) {
+        showToast('Failed to delete chats', 'error');
+    }
+}
+
+/**
+ * Open chat from list
+ * @param {string} conversationId - ID of the conversation
+ */
+function openChatFromList(conversationId) {
+    window.location.href = `/chat?conversation=${conversationId}`;
+}
+
+/**
+ * Toggle chat selection checkbox
+ * @param {string} conversationId - ID of the conversation
+ */
+function toggleChatSelection(conversationId) {
+    const checkbox = document.querySelector(`[data-id="${conversationId}"] .chat-list-checkbox`);
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        updateSelectCount();
+    }
+}
+
+/**
+ * Update the selection count display
+ */
+function updateSelectCount() {
+    const selectedCount = document.querySelectorAll('.chat-list-checkbox:checked').length;
+    const countDisplay = document.getElementById('selectCount');
+    if (countDisplay) {
+        countDisplay.textContent = `${selectedCount} selected`;
+    }
+}
+
+/**
+ * Close share modal
+ * @param {Event} event - The click event
+ */
+function closeShareModal(event) {
+    if (event.target === event.currentTarget) {
+        const modal = document.getElementById('shareModal');
+        if (modal) modal.style.display = 'none';
+    }
+}
+
+// ============================================
 // Auto-initialize on DOM ready
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
     restoreSidebarState();
+    setupEventDelegation();
 
     // Initialize Chat interface if on chat page
     if (document.querySelector('.chat-page')) {

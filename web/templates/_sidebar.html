@@ -2,7 +2,7 @@
 <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <a href="/chat" class="sidebar-logo">MV Internal</a>
-        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Close sidebar">
+        <button class="sidebar-toggle" data-action="toggle-sidebar" title="Close sidebar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
                 <path d="M9 3v18"/>
@@ -30,7 +30,7 @@
             </svg>
             Projects
         </a>
-        <div class="sidebar-section-header expanded" id="libraryHeader" onclick="toggleLibrarySection()">
+        <div class="sidebar-section-header expanded" id="libraryHeader" data-action="toggle-library">
             <div class="sidebar-section-header-left">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -84,7 +84,7 @@
     <div class="conversations-list" id="conversationsList">
         {% for group in recent_projects %}
         <div class="recents-project-group">
-            <div class="recents-project-header expanded" onclick="toggleRecentsProject('{{ group.project.id }}')">
+            <div class="recents-project-header expanded" data-action="toggle-recents-project" data-project-id="{{ group.project.id }}">
                 <span class="recents-project-dot" style="background: {{ group.project.color }}"></span>
                 <span class="recents-project-name">{{ group.project.name }}</span>
                 <svg class="recents-project-chevron" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -92,13 +92,14 @@
             <div class="recents-project-items expanded" id="recents-project-{{ group.project.id }}">
                 {% for conv in group.conversations %}
                 <div class="conversation-item nested{% if conv.id == conversation_id %} active{% endif %}"
-                     onclick="loadConversation('{{ conv.id }}')"
+                     data-action="load-conversation"
+                     data-conversation-id="{{ conv.id }}"
                      data-id="{{ conv.id }}"
                      data-title="{{ conv.title }}">
                     <div class="conversation-title">
                         {% if conv.starred %}<span class="sidebar-star-icon">★</span>{% endif %}{{ conv.title }}
                     </div>
-                    <button class="chat-item-menu" onclick="event.stopPropagation(); openChatMenu(event, '{{ conv.id }}', '{{ conv.title|e }}')">•••</button>
+                    <button class="chat-item-menu" data-action="open-chat-menu" data-conversation-id="{{ conv.id }}" data-title="{{ conv.title|e }}">•••</button>
                 </div>
                 {% endfor %}
             </div>
@@ -106,13 +107,14 @@
         {% endfor %}
         {% for conv in standalone_chats %}
         <div class="conversation-item{% if conv.id == conversation_id %} active{% endif %}"
-             onclick="loadConversation('{{ conv.id }}')"
+             data-action="load-conversation"
+             data-conversation-id="{{ conv.id }}"
              data-id="{{ conv.id }}"
              data-title="{{ conv.title }}">
             <div class="conversation-title">
                 {% if conv.starred %}<span class="sidebar-star-icon">★</span>{% endif %}{{ conv.title }}
             </div>
-            <button class="chat-item-menu" onclick="event.stopPropagation(); openChatMenu(event, '{{ conv.id }}', '{{ conv.title|e }}')">•••</button>
+            <button class="chat-item-menu" data-action="open-chat-menu" data-conversation-id="{{ conv.id }}" data-title="{{ conv.title|e }}">•••</button>
         </div>
         {% endfor %}
     </div>
@@ -124,7 +126,7 @@
                 <span class="user-name">{{ user.name if user and user.name else 'User' }}</span>
             </div>
         </div>
-        <button class="user-menu-btn" onclick="toggleUserMenu(event)" title="Menu">
+        <button class="user-menu-btn" data-action="toggle-user-menu" title="Menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
