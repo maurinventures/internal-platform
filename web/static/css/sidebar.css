@@ -280,8 +280,11 @@
 .rounded-full { border-radius: 50%; }
 .font-bold { font-weight: bold; }
 .select-none { user-select: none; }
+.h-5 { height: 20px; }
+.w-5 { width: 20px; }
 .h-9 { height: 36px; }
 .w-9 { width: 36px; }
+.text-\\[12px\\] { font-size: 12px; }
 .text-\\[16px\\] { font-size: 16px; }
 .border-0\\.5 { border-width: 0.5px; }
 .border-transparent { border-color: transparent; }
