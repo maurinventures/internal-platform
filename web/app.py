@@ -1408,6 +1408,105 @@ def detect_copy_intent(message: str) -> dict:
     }
 
 
+def detect_script_intent(message: str) -> bool:
+    """Detect if user wants video script generation.
+
+    Returns True if message indicates they want to create a video script.
+    """
+    message_lower = message.lower()
+
+    # Script action indicators
+    script_actions = ['create', 'make', 'generate', 'write', 'draft', 'build', 'compile']
+    script_types = ['script', 'video', 'compilation', 'edit', 'clip', 'footage']
+
+    # Check for script action + type combinations
+    for action in script_actions:
+        for stype in script_types:
+            if action in message_lower and stype in message_lower:
+                return True
+
+    # Check for explicit script requests
+    script_phrases = [
+        'video script', 'create a script', 'make a video',
+        'compile clips', 'video compilation', 'script about',
+        'using clips', 'from the transcripts', 'from the videos'
+    ]
+
+    for phrase in script_phrases:
+        if phrase in message_lower:
+            return True
+
+    return False
+
+
+def generate_general_response(user_message: str, conversation_history: list, model: str = "claude-sonnet", user_id: str = None, conversation_id: str = None):
+    """Generate a general conversational response without video/script focus."""
+
+    system_prompt = """You are Claude, a helpful AI assistant created by Anthropic.
+
+You're here to help with a wide variety of tasks - answering questions, having conversations, analyzing information, helping with research, writing, coding, and more.
+
+You should be friendly, clear, and direct. Focus on being genuinely helpful.
+
+The user has access to a video management system with transcripts, but you should only discuss that if they specifically ask about it. Otherwise, be a general-purpose assistant."""
+
+    # Build messages from conversation history
+    messages = []
+    for msg in conversation_history[-10:]:  # Keep last 10 messages for context
+        messages.append({
+            "role": msg.get("role", "user"),
+            "content": msg.get("content", "")
+        })
+
+    # Add current message
+    messages.append({"role": "user", "content": user_message})
+
+    try:
+        # Use Claude for general chat
+        client = anthropic.Anthropic(api_key=get_config('api', 'anthropic_api_key'))
+
+        start_time = time.time()
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            system=system_prompt,
+            messages=messages
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        response_text = response.content[0].text
+
+        # Log to database
+        if user_id and conversation_id:
+            with DatabaseSession() as db_session:
+                ai_log = AILog(
+                    mode="chat",
+                    model="claude-sonnet-4-20250514",
+                    prompt=user_message[:5000],
+                    response=response_text[:10000],
+                    success=True,
+                    latency_ms=latency_ms,
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    user_id=UUID(user_id) if user_id else None,
+                    conversation_id=UUID(conversation_id) if conversation_id else None
+                )
+                db_session.add(ai_log)
+                db_session.commit()
+
+        return {
+            'message': response_text,
+            'model': 'claude-sonnet-4-20250514'
+        }
+
+    except Exception as e:
+        print(f"Error in general chat: {str(e)}")
+        return {
+            'message': f"I encountered an error: {str(e)}",
+            'model': model
+        }
+
+
 def generate_copy_with_ai(
     user_message: str,
     persona_name: str,
@@ -3252,24 +3351,22 @@ def api_chat():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
-        # Detect if user wants copy generation vs video scripts
-        intent = detect_copy_intent(user_message)
-
-        # Search for relevant transcript context (used for both modes)
-        context = search_transcripts_for_context(user_message)
-
-        # Also search audio recordings for relevant segments
-        audio_context = search_audio_for_context(user_message, limit=50)
+        # Detect user intent
+        copy_intent = detect_copy_intent(user_message)
+        script_intent = detect_script_intent(user_message)
 
         # COPY GENERATION MODE
-        if intent['is_copy'] and intent['persona_name']:
+        if copy_intent['is_copy'] and copy_intent['persona_name']:
+            # Search for relevant context for copy generation
+            context = search_transcripts_for_context(user_message)
+            audio_context = search_audio_for_context(user_message, limit=50)
             # Use Claude for copy generation (better at voice matching)
             copy_model = 'claude-sonnet' if not model.startswith('claude') else model
 
             result = generate_copy_with_ai(
                 user_message=user_message,
-                persona_name=intent['persona_name'],
-                platform=intent['platform'] or 'general',
+                persona_name=copy_intent['persona_name'],
+                platform=copy_intent['platform'] or 'general',
                 transcript_context=context or [],
                 conversation_history=conversation_history,
                 model=copy_model,
@@ -3305,19 +3402,65 @@ def api_chat():
                 'clips': [],
                 'has_script': False,
                 'is_copy': True,
-                'persona': intent['persona_name'],
-                'platform': intent['platform'],
+                'persona': copy_intent['persona_name'],
+                'platform': copy_intent['platform'],
                 'context_segments': len(context) if context else 0,
                 'model': copy_model,
                 'conversation_id': conversation_id
             })
 
-        # VIDEO SCRIPT MODE (default)
+        # VIDEO SCRIPT MODE
+        if script_intent:
+            # Search for relevant transcript context
+            context = search_transcripts_for_context(user_message)
+            audio_context = search_audio_for_context(user_message, limit=50)
 
-        if not context:
-            response_text = "I couldn't find any matching content in the video library. Try different keywords or check the Transcripts page to see what's available."
+            if not context:
+                response_text = "I couldn't find any matching content in the video library. Try different keywords or check the Transcripts page to see what's available."
 
-            # Save messages if conversation exists
+                # Save messages if conversation exists
+                if conversation_id and 'user_id' in session:
+                    with DatabaseSession() as db_session:
+                        # Save user message
+                        user_msg = ChatMessage(
+                            conversation_id=UUID(conversation_id),
+                            role='user',
+                            content=user_message
+                        )
+                        db_session.add(user_msg)
+
+                        # Save assistant response
+                        assistant_msg = ChatMessage(
+                            conversation_id=UUID(conversation_id),
+                            role='assistant',
+                            content=response_text,
+                            model=model
+                        )
+                        db_session.add(assistant_msg)
+
+                        # Update conversation timestamp
+                        conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
+                        if conv:
+                            conv.updated_at = datetime.utcnow()
+
+                        db_session.commit()
+
+                return jsonify({
+                    'response': response_text,
+                    'clips': [],
+                    'has_script': False,
+                    'context_segments': 0,
+                    'model': model,
+                    'conversation_id': conversation_id
+                })
+
+            # Generate response with AI (exclude previously used clips)
+            result = generate_script_with_ai(
+                user_message, context, conversation_history, model=model, exclude_clips=previous_clips,
+                user_id=session.get('user_id'), conversation_id=conversation_id
+            )
+
+            # Save messages to conversation
             if conversation_id and 'user_id' in session:
                 with DatabaseSession() as db_session:
                     # Save user message
@@ -3328,78 +3471,81 @@ def api_chat():
                     )
                     db_session.add(user_msg)
 
-                    # Save assistant response
+                    # Save assistant response with clips
                     assistant_msg = ChatMessage(
                         conversation_id=UUID(conversation_id),
                         role='assistant',
-                        content=response_text,
+                        content=result['message'],
+                        clips_json=result.get('clips', []),
                         model=model
                     )
                     db_session.add(assistant_msg)
 
-                    # Update conversation timestamp
+                    # Update conversation timestamp and title if it's the first message
                     conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
                     if conv:
                         conv.updated_at = datetime.utcnow()
+                        # Auto-title based on first user message if still default
+                        if conv.title == 'New Chat':
+                            conv.title = user_message[:50] + ('...' if len(user_message) > 50 else '')
 
                     db_session.commit()
 
             return jsonify({
-                'response': response_text,
-                'clips': [],
-                'has_script': False,
-                'context_segments': 0,
+                'response': result['message'],
+                'clips': result.get('clips', []),
+                'audio_clips': audio_context[:20] if audio_context else [],  # Include relevant audio segments
+                'has_script': result.get('has_script', False),
+                'context_segments': len(context),
+                'audio_segments': len(audio_context) if audio_context else 0,
                 'model': model,
                 'conversation_id': conversation_id
             })
 
-        # Generate response with AI (exclude previously used clips)
-        result = generate_script_with_ai(
-            user_message, context, conversation_history, model=model, exclude_clips=previous_clips,
-            user_id=session.get('user_id'), conversation_id=conversation_id
-        )
+        # GENERAL CHAT MODE (default)
+        else:
+            result = generate_general_response(
+                user_message=user_message,
+                conversation_history=conversation_history,
+                model=model,
+                user_id=session.get('user_id'),
+                conversation_id=conversation_id
+            )
 
-        # Save messages to conversation
-        if conversation_id and 'user_id' in session:
-            with DatabaseSession() as db_session:
-                # Save user message
-                user_msg = ChatMessage(
-                    conversation_id=UUID(conversation_id),
-                    role='user',
-                    content=user_message
-                )
-                db_session.add(user_msg)
+            # Save messages to conversation
+            if conversation_id and 'user_id' in session:
+                with DatabaseSession() as db_session:
+                    user_msg = ChatMessage(
+                        conversation_id=UUID(conversation_id),
+                        role='user',
+                        content=user_message
+                    )
+                    db_session.add(user_msg)
 
-                # Save assistant response with clips
-                assistant_msg = ChatMessage(
-                    conversation_id=UUID(conversation_id),
-                    role='assistant',
-                    content=result['message'],
-                    clips_json=result.get('clips', []),
-                    model=model
-                )
-                db_session.add(assistant_msg)
+                    assistant_msg = ChatMessage(
+                        conversation_id=UUID(conversation_id),
+                        role='assistant',
+                        content=result['message'],
+                        model=result['model']
+                    )
+                    db_session.add(assistant_msg)
 
-                # Update conversation timestamp and title if it's the first message
-                conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
-                if conv:
-                    conv.updated_at = datetime.utcnow()
-                    # Auto-title based on first user message if still default
-                    if conv.title == 'New Chat':
-                        conv.title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+                    conv = db_session.query(Conversation).filter(Conversation.id == UUID(conversation_id)).first()
+                    if conv:
+                        conv.updated_at = datetime.utcnow()
+                        if conv.title == 'New Chat':
+                            conv.title = user_message[:50] + ('...' if len(user_message) > 50 else '')
 
-                db_session.commit()
+                    db_session.commit()
 
-        return jsonify({
-            'response': result['message'],
-            'clips': result.get('clips', []),
-            'audio_clips': audio_context[:20] if audio_context else [],  # Include relevant audio segments
-            'has_script': result.get('has_script', False),
-            'context_segments': len(context),
-            'audio_segments': len(audio_context) if audio_context else 0,
-            'model': model,
-            'conversation_id': conversation_id
-        })
+            return jsonify({
+                'response': result['message'],
+                'clips': [],
+                'has_script': False,
+                'context_segments': 0,
+                'model': result['model'],
+                'conversation_id': conversation_id
+            })
 
     except Exception as e:
         import traceback
