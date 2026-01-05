@@ -714,6 +714,11 @@
     font-weight: 500;
 }
 
+.col-segments {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+}
+
 .status-done {
     display: inline-flex;
     align-items: center;
