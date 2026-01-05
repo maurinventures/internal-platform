@@ -53,7 +53,7 @@
     {% include '_dropdown_menu.html' %}
 
     <!-- Floating sidebar toggle when collapsed -->
-    <button class="sidebar-toggle-floating" onclick="toggleSidebar()" title="Open sidebar" style="display: none;">
+    <button class="sidebar-toggle-floating" data-action="toggle-sidebar" title="Open sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <path d="M9 3v18"/>
@@ -61,6 +61,19 @@
     </button>
 
     <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
+
+    <!-- Emergency sidebar fix - remove after one deployment -->
+    <script>
+    // Force sidebar to be visible on next page load
+    if (localStorage.getItem('sidebarCollapsed') === 'true') {
+        localStorage.setItem('sidebarCollapsed', 'false');
+        // Force reload to apply
+        if (document.readyState === 'loading') {
+            window.location.reload();
+        }
+    }
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
