@@ -530,36 +530,9 @@
     box-shadow: none;
 }
 
-/* Model Dropdown */
-.model-dropdown {
-    position: absolute;
-    bottom: 100%;
-    right: 0;
-    margin-bottom: 8px;
-    background: white;
-    border: 1px solid #e5e5e5;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    min-width: 260px;
-    padding: 8px;
-    display: none;
-    z-index: 100;
-}
-
-.model-dropdown.open {
-    display: block;
-}
 
 
-.dropdown-divider {
-    height: 1px;
-    background: #e5e5e5;
-    margin: 8px 0;
-}
 
-.more-models {
-    color: #666 !important;
-}
 
 
 
