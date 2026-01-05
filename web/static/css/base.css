@@ -230,26 +230,41 @@ a:hover {
     transform: translateX(0) !important;
 }
 
-/* Hide text in collapsed sidebar */
+/* Hide text in collapsed sidebar by setting font-size to 0 */
 .sidebar.collapsed .sidebar-logo,
-.sidebar.collapsed .new-chat-btn span:not(.new-chat-icon),
-.sidebar.collapsed .sidebar-nav-item span:not(svg),
-.sidebar.collapsed .sidebar-section-header-left span:not(svg),
+.sidebar.collapsed .new-chat-btn,
+.sidebar.collapsed .sidebar-nav-item,
+.sidebar.collapsed .sidebar-section-header-left,
 .sidebar.collapsed .sidebar-section-title,
 .sidebar.collapsed .conversation-title,
 .sidebar.collapsed .recents-project-name,
-.sidebar.collapsed .user-name,
-.sidebar.collapsed .sidebar-divider {
-    display: none !important;
+.sidebar.collapsed .user-name {
+    font-size: 0 !important;
+    line-height: 0 !important;
 }
 
-/* Center icons in collapsed sidebar */
+/* Keep icons visible in collapsed sidebar */
+.sidebar.collapsed svg,
+.sidebar.collapsed .new-chat-icon,
+.sidebar.collapsed .user-avatar {
+    font-size: initial !important;
+    line-height: initial !important;
+}
+
+/* Center content in collapsed sidebar */
 .sidebar.collapsed .new-chat-btn,
 .sidebar.collapsed .sidebar-nav-item,
 .sidebar.collapsed .sidebar-section-header {
     justify-content: center !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+    text-align: center !important;
+}
+
+/* Hide divider and other elements completely */
+.sidebar.collapsed .sidebar-divider,
+.sidebar.collapsed .sidebar-section-toggle {
+    display: none !important;
 }
 
 /* Hide sections when collapsed */
@@ -261,6 +276,12 @@ a:hover {
 /* User info in collapsed mode */
 .sidebar.collapsed .user-info {
     justify-content: center !important;
+}
+
+/* Ensure proper spacing for collapsed elements */
+.sidebar.collapsed .sidebar-header {
+    justify-content: center !important;
+    padding: 1rem 0.5rem 0.75rem !important;
 }
 
 /* Hide floating toggle when sidebar is in collapsed icon mode */
