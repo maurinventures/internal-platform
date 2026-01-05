@@ -1713,7 +1713,7 @@ def get_sidebar_data(user_id):
         # Fetch conversations (non-empty ones for sidebar)
         conversations = db_session.query(Conversation).filter(
             Conversation.user_id == user_id
-        ).order_by(Conversation.updated_at.desc()).all()
+        ).order_by(Conversation.starred.desc(), Conversation.updated_at.desc()).all()
 
         # Group conversations by project
         project_groups = {}
@@ -1727,7 +1727,8 @@ def get_sidebar_data(user_id):
                 'id': str(c.id),
                 'title': c.title,
                 'updated_at': format_date(c.updated_at),
-                'message_count': len(c.messages)
+                'message_count': len(c.messages),
+                'starred': c.starred if hasattr(c, 'starred') else False
             }
 
             if c.project:
@@ -1744,6 +1745,13 @@ def get_sidebar_data(user_id):
                 project_groups[project_id]['conversations'].append(conv_data)
             else:
                 ungrouped.append(conv_data)
+
+        # Sort conversations within each project group (starred first, then by date)
+        for group in project_groups.values():
+            group['conversations'].sort(key=lambda x: (not x['starred'], x['id']), reverse=False)
+
+        # Sort ungrouped conversations (starred first, then by date) - should already be sorted from query
+        ungrouped.sort(key=lambda x: (not x['starred'], x['id']), reverse=False)
 
         return sidebar_projects, list(project_groups.values()), ungrouped
 

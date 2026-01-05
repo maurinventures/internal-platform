@@ -1053,6 +1053,13 @@
     flex-shrink: 0;
 }
 
+/* Sidebar star icons */
+.sidebar-star-icon {
+    color: #f59e0b;
+    font-size: 0.75rem;
+    margin-right: 0.375rem;
+}
+
 .chat-list-meta {
     font-size: 0.875rem;
     color: var(--color-text-secondary);

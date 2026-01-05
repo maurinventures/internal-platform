@@ -95,7 +95,9 @@
                      onclick="loadConversation('{{ conv.id }}')"
                      data-id="{{ conv.id }}"
                      data-title="{{ conv.title }}">
-                    <div class="conversation-title">{{ conv.title }}</div>
+                    <div class="conversation-title">
+                        {% if conv.starred %}<span class="sidebar-star-icon">★</span>{% endif %}{{ conv.title }}
+                    </div>
                     <button class="chat-item-menu" onclick="event.stopPropagation(); openChatMenu(event, '{{ conv.id }}', '{{ conv.title|e }}')">•••</button>
                 </div>
                 {% endfor %}
@@ -107,7 +109,9 @@
              onclick="loadConversation('{{ conv.id }}')"
              data-id="{{ conv.id }}"
              data-title="{{ conv.title }}">
-            <div class="conversation-title">{{ conv.title }}</div>
+            <div class="conversation-title">
+                {% if conv.starred %}<span class="sidebar-star-icon">★</span>{% endif %}{{ conv.title }}
+            </div>
             <button class="chat-item-menu" onclick="event.stopPropagation(); openChatMenu(event, '{{ conv.id }}', '{{ conv.title|e }}')">•••</button>
         </div>
         {% endfor %}
