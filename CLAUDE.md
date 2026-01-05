@@ -2,7 +2,9 @@
 
 ## Model
 
-**Use Claude Opus 4.5** (`claude-opus-4-5-20251101`) for all tasks on this project.
+**Use Claude Sonnet 4** (`claude-sonnet-4-20250514`) for all tasks on this project.
+
+Only use Opus 4.5 if explicitly requested or if Sonnet fails on a complex task.
 
 ---
 
