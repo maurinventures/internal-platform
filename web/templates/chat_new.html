@@ -944,6 +944,13 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Initialize Chat object for Claude.ai interface
+if (typeof Chat !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', function() {
+        Chat.init();
+    });
+}
+
 // showToast() function available via shared.js
 </script>
 {% endblock %}
