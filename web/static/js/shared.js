@@ -150,6 +150,25 @@ function showToast(message, type = 'info') {
 // ============================================
 
 /**
+ * Toggle expand/collapse state of a recents project folder
+ * @param {string} projectId - UUID of the project
+ */
+function toggleRecentsProject(projectId) {
+    const header = document.querySelector(`.recents-project-header[onclick*="${projectId}"]`);
+    const items = document.getElementById(`recents-project-${projectId}`);
+
+    if (!header || !items) return;
+
+    // Toggle expanded class
+    header.classList.toggle('expanded');
+    items.classList.toggle('expanded');
+
+    // Save state to localStorage
+    const isExpanded = items.classList.contains('expanded');
+    localStorage.setItem(`recents_project_${projectId}`, isExpanded);
+}
+
+/**
  * Render conversations list (flat list, no project grouping)
  * @param {Array} conversations - Array of conversation objects
  * @param {string} containerId - ID of the container element (default: 'conversationsList')
