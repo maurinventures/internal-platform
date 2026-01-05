@@ -849,6 +849,9 @@ function sendMessage() {
 }
 
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', initializeChatInput);
+document.addEventListener('DOMContentLoaded', () => {
+    initializeChatInput();
+    Chat.init(); // Initialize chat functionality including attach button
+});
 </script>
 {% endblock %}
