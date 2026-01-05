@@ -195,6 +195,12 @@
     font-weight: inherit;
 }
 
+.claude-textarea:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: none;
+}
+
 /* Claude Input Controls */
 .claude-input-controls {
     display: flex;
