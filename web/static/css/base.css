@@ -300,3 +300,38 @@ a:hover {
 .sidebar.collapsed ~ .main-content .sidebar-toggle-floating {
     display: none !important;
 }
+
+/* Consistent icon styling for all sidebar icons */
+.sidebar svg {
+    width: 20px !important;
+    height: 20px !important;
+    color: var(--color-text-muted) !important;
+    transition: all 0.3s ease !important;
+    fill: currentColor !important;
+    flex-shrink: 0;
+}
+
+/* Icon hover states */
+.sidebar-nav-item:hover svg,
+.sidebar-section-header:hover svg,
+.user-menu-btn:hover svg,
+.recents-project-header:hover svg {
+    color: var(--color-text) !important;
+}
+
+/* Active state icons */
+.sidebar-nav-item.active svg {
+    color: var(--color-text) !important;
+}
+
+/* New chat icon keeps orange background */
+.new-chat-icon {
+    background: var(--color-accent) !important;
+}
+
+/* New chat plus icon inside circle */
+.new-chat-icon svg {
+    color: white !important;
+    width: 10px !important;
+    height: 10px !important;
+}
