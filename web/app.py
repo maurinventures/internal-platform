@@ -1661,10 +1661,25 @@ def chat_recents():
         return redirect(url_for('login'))
     user_id = UUID(session['user_id'])
     sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
+
+    # Fetch all conversations for main content area
+    with DatabaseSession() as db_session:
+        conversations = db_session.query(Conversation).filter(
+            Conversation.user_id == user_id
+        ).order_by(Conversation.updated_at.desc()).all()
+
+        conversations_data = [{
+            'id': str(c.id),
+            'title': c.title,
+            'updated_at': c.updated_at.isoformat(),
+            'message_count': len(c.messages)
+        } for c in conversations]
+
     return render_template('chat.html', view='recents',
                          sidebar_projects=sidebar_projects,
                          sidebar_conv_groups=conv_groups,
-                         sidebar_conv_ungrouped=conv_ungrouped)
+                         sidebar_conv_ungrouped=conv_ungrouped,
+                         conversations=conversations_data)
 
 
 @app.route('/chat/<conversation_id>')
