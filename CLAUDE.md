@@ -1,14 +1,21 @@
 # Claude Code Rules for MV Internal
 
-**Last Updated:** 2026-01-04 21:30 EST
+**Last Updated:** 2026-01-05 03:40 UTC
 
 ---
 
-## MODEL REQUIREMENT
+## MODEL REQUIREMENT — CRITICAL COST CONTROL
 
-**Use Claude Sonnet 4** (`claude-sonnet-4-20250514`) for all tasks.
+⚠️ **MANDATORY: Use Claude Sonnet 4 (`claude-sonnet-4-20250514`) ONLY** ⚠️
 
-**Opus 4.5 is too expensive.** Only use if explicitly requested.
+**DO NOT USE:**
+- ❌ **Sonnet 4.5** (`claude-sonnet-4-5-20250929`) - Costs ~$10 USD per 30 minutes
+- ❌ **Opus 4.5** (`claude-opus-4-5-20251101`) - Extremely expensive
+
+**ONLY USE:**
+- ✅ **Sonnet 4** (`claude-sonnet-4-20250514`) - Cost-effective for all tasks
+
+If the session starts with any model other than Sonnet 4, STOP immediately and inform the user to restart with the correct model.
 
 ---
 
@@ -22,7 +29,10 @@ At the START of every session, Claude Code must:
 ✅ Model: Claude Sonnet 4 (claude-sonnet-4-20250514)
 ```
 
-If using Opus, STOP and switch to Sonnet unless user explicitly approved Opus.
+**CRITICAL:** If using Sonnet 4.5 or Opus 4.5, STOP immediately and tell user:
+- Current model is TOO EXPENSIVE (costs ~$10/30min)
+- User must exit and restart session with Sonnet 4
+- Run: `claude config set model claude-sonnet-4-20250514`
 
 ### 2. Confirm Task Understanding
 
