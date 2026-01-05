@@ -71,7 +71,7 @@
 
 .claude-logo {
     width: 2rem;
-    color: #d97757;
+    color: var(--color-accent);
     transition: color 0.3s ease;
 }
 
@@ -434,7 +434,7 @@
 }
 
 .more-models {
-    color: #6b7280 !important;
+    color: var(--color-text-muted) !important;
 }
 
 .submenu-arrow {
@@ -507,7 +507,7 @@
 }
 
 .claude-send-btn:hover:not(:disabled) {
-    background: #c56648;
+    background: #c56648; /* Darker accent - consider adding CSS variable */
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(217, 119, 87, 0.25);
 }
@@ -572,7 +572,7 @@
 .category-btn svg {
     width: 16px;
     height: 16px;
-    color: #6b7280;
+    color: var(--color-text-muted);
     flex-shrink: 0;
 }
 
@@ -644,7 +644,7 @@
 }
 
 .message-user .message-content {
-    background: #d97757;
+    background: var(--color-accent);
     color: white;
     border-bottom-right-radius: 4px;
 }
