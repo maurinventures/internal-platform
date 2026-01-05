@@ -1451,7 +1451,7 @@ The user has access to a video management system with transcripts, but you shoul
 
     try:
         # Use Claude for general chat
-        client = anthropic.Anthropic(api_key=get_config('api', 'anthropic_api_key'))
+        client = anthropic.Anthropic(api_key=get_config().anthropic_api_key)
 
         start_time = time.time()
         response = client.messages.create(
