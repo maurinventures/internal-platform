@@ -18,12 +18,12 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: Georgia, 'Crimson Text', 'Lora', serif;
     background: var(--color-bg);
     min-height: 100vh;
     display: flex;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.7;
 }
 
 .app-layout {
@@ -82,4 +82,88 @@ body {
 
 .sidebar.collapsed ~ .main-content .sidebar-toggle-floating {
     display: flex;
+}
+
+/* Claude.ai-style typography and spacing enhancements */
+
+/* Generous spacing for content areas */
+.main-content {
+    padding: 2rem;
+}
+
+/* Enhanced spacing for text content */
+h1, h2, h3, h4, h5, h6 {
+    line-height: 1.6;
+    margin-bottom: 1.2rem;
+    font-weight: 400;
+}
+
+p {
+    margin-bottom: 1.2rem;
+    line-height: 1.7;
+}
+
+/* Interactive elements with comfortable padding */
+button, .btn {
+    padding: 0.8rem 1.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: white;
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.5;
+}
+
+button:hover, .btn:hover {
+    background: var(--color-hover);
+    border-color: var(--color-text-muted);
+}
+
+/* Form elements with breathing room */
+input, textarea {
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
+}
+
+/* List spacing */
+ul, ol {
+    margin-bottom: 1.2rem;
+    padding-left: 1.5rem;
+}
+
+li {
+    margin-bottom: 0.4rem;
+    line-height: 1.6;
+}
+
+/* Chat and content areas */
+.chat-container, .content-area {
+    padding: 1.5rem;
+    line-height: 1.7;
+}
+
+/* Links with subtle styling */
+a {
+    color: var(--color-text);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-border);
+    transition: border-color 0.15s;
+}
+
+a:hover {
+    border-bottom-color: var(--color-accent);
 }
