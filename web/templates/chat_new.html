@@ -707,7 +707,8 @@ function openChatMenu(event, chatId, chatTitle, fromHeader = false) {
     window.menuChatTitle = chatTitle;
 
     // Update star button based on current state
-    const conv = conversations.find(c => c.id === chatId);
+    const conv = (typeof conversations !== 'undefined' && conversations) ?
+        conversations.find(c => c.id === chatId) : null;
     const isStarred = conv ? conv.starred : false;
     const starIcon = document.getElementById('starIcon');
     const starText = document.getElementById('starText');
@@ -756,7 +757,8 @@ function chatMenuAction(action) {
     switch (action) {
         case 'star':
             // Find the conversation to get current starred state
-            const conv = conversations.find(c => c.id === window.menuChatId);
+            const conv = (typeof conversations !== 'undefined' && conversations) ?
+                conversations.find(c => c.id === window.menuChatId) : null;
             const currentStarred = conv ? conv.starred : false;
             const newStarred = !currentStarred;
 
@@ -767,13 +769,15 @@ function chatMenuAction(action) {
             })
             .then(r => {
                 if (r.ok) {
-                    // Update the conversation in the array
+                    // Update the conversation in the array if it exists
                     if (conv) {
                         conv.starred = newStarred;
                     }
 
-                    // Re-render the list to reflect changes
-                    renderChatsList();
+                    // Re-render the list only if we're on the recents page
+                    if (typeof renderChatsList === 'function') {
+                        renderChatsList();
+                    }
 
                     showToast(newStarred ? 'Chat starred' : 'Chat unstarred', 'success');
                 } else {
@@ -800,14 +804,18 @@ function chatMenuAction(action) {
                             if (titleEl) titleEl.textContent = newName.trim();
                         }
 
-                        // Update conversations array
-                        const conv = conversations.find(c => c.id === window.menuChatId);
-                        if (conv) {
-                            conv.title = newName.trim();
+                        // Update conversations array if it exists
+                        if (typeof conversations !== 'undefined' && conversations) {
+                            const conv = conversations.find(c => c.id === window.menuChatId);
+                            if (conv) {
+                                conv.title = newName.trim();
+                            }
                         }
 
-                        // Re-render the list to reflect changes
-                        renderChatsList();
+                        // Re-render the list only if we're on the recents page
+                        if (typeof renderChatsList === 'function') {
+                            renderChatsList();
+                        }
 
                         showToast('Chat renamed', 'success');
                     } else {
@@ -827,11 +835,15 @@ function chatMenuAction(action) {
                 fetch(`/api/conversations/${window.menuChatId}`, { method: 'DELETE' })
                 .then(r => {
                     if (r.ok) {
-                        // Remove from conversations array
-                        conversations = conversations.filter(c => c.id !== window.menuChatId);
+                        // Remove from conversations array if it exists
+                        if (typeof conversations !== 'undefined' && conversations) {
+                            conversations = conversations.filter(c => c.id !== window.menuChatId);
+                        }
 
-                        // Re-render the chat list
-                        renderChatsList();
+                        // Re-render the chat list only if we're on the recents page
+                        if (typeof renderChatsList === 'function') {
+                            renderChatsList();
+                        }
 
                         showToast('Chat deleted', 'success');
                     } else {
