@@ -378,9 +378,7 @@ document.getElementById('createModal').addEventListener('click', function(e) { i
 
 document.addEventListener('DOMContentLoaded', function() {
     // Sidebar state restoration is handled by shared.js restoreSidebarState()
-
-    // Load data for sidebar
-    loadConversations();
+    // Sidebar conversations are server-rendered - no need to fetch/render via JS
 });
 </script>
 </body>
