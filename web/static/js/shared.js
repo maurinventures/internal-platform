@@ -332,6 +332,7 @@ const Chat = {
         this.setGreeting();
         this.bindEvents();
         this.checkExistingChat();
+        this.checkAttachAvailability();
 
         console.log('Chat initialized');
     },
@@ -592,6 +593,18 @@ const Chat = {
             return pathParts[2];
         }
         return null;
+    },
+
+    checkAttachAvailability() {
+        // Hide attach button if no active conversation
+        const conversationId = this.getConversationId();
+        if (this.elements.attachBtn) {
+            if (conversationId) {
+                this.elements.attachBtn.style.display = 'flex';
+            } else {
+                this.elements.attachBtn.style.display = 'none';
+            }
+        }
     },
 
     async captureScreenshot() {
