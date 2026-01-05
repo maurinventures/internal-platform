@@ -1,0 +1,39 @@
+{% extends 'base_new.html' %}
+
+{% block title %}Transcripts - MV Internal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Transcripts</h1>
+    <a href="/transcripts/search" class="btn">Search All Transcripts</a>
+</div>
+
+{% if transcripts %}
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Video Title</th>
+                <th style="text-align: center; width: 120px;">Segments</th>
+                <th style="text-align: right; width: 180px;">Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in transcripts %}
+            <tr onclick="window.location='/transcripts/{{ t.id }}'" style="cursor: pointer;">
+                <td><a href="/transcripts/{{ t.id }}">{{ t.video_title }}</a></td>
+                <td style="text-align: center; color: #666;">{{ t.segment_count }}</td>
+                <td style="text-align: right; color: #888; font-size: 0.8125rem;">{{ t.created_at|timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="table-footer">{{ transcripts|length }} transcript{% if transcripts|length != 1 %}s{% endif %} total</div>
+{% else %}
+<div class="empty-state">
+    <h2>No transcripts yet</h2>
+    <p>Transcribe videos using the CLI to get started</p>
+</div>
+{% endif %}
+{% endblock %}

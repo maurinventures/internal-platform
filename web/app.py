@@ -372,11 +372,7 @@ def transcripts():
                 'created_at': t.created_at,
             })
 
-    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
-    return render_template('transcripts.html', transcripts=transcript_list,
-                         sidebar_projects=sidebar_projects,
-                         sidebar_conv_groups=conv_groups,
-                         sidebar_conv_ungrouped=conv_ungrouped)
+    return render_with_sidebar('transcripts_new.html', 'transcripts', transcripts=transcript_list)
 
 
 @app.route('/transcripts/<transcript_id>')
