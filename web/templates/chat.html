@@ -5257,7 +5257,7 @@ async function sendFeedback(feedbackId, rating, btn) {
     }
 }
 
-chatInput.focus();
+if (chatInput) chatInput.focus();
 
 // Video preview functions
 const videoModal = document.getElementById('videoModal');

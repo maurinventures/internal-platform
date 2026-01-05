@@ -215,6 +215,16 @@ async function testChatFunctionality() {
 async function testSidebarHoverMenus() {
     console.log('\n📍 TESTING SIDEBAR HOVER MENUS\n');
 
+    // Monitor console errors
+    PAGE.on('console', msg => {
+        if (msg.type() === 'error') {
+            console.log(`  CONSOLE ERROR: ${msg.text()}`);
+        }
+    });
+    PAGE.on('pageerror', err => {
+        console.log(`  PAGE ERROR: ${err.message}`);
+    });
+
     await PAGE.goto(`${BASE_URL}/chat`);
     await PAGE.waitForLoadState('networkidle');
 
@@ -243,14 +253,31 @@ async function testSidebarHoverMenus() {
         await log('Hover shows options button', isVisible ? 'PASS' : 'FAIL', isVisible ? 'opacity > 0' : 'opacity still 0');
 
         if (isVisible) {
-            // Click the button
-            await optionsBtn.click({ force: true });
+            // Use Playwright's native click
+            await optionsBtn.click();
             await PAGE.waitForTimeout(500);
 
-            const menu = await PAGE.$('#chatMenu.open, .chat-menu-dropdown.open');
-            await log('Options button opens menu', menu ? 'PASS' : 'FAIL');
+            // Check if menu has 'open' class
+            const menuOpen = await PAGE.$('#chatMenu.open');
 
-            if (menu) {
+            // Also check menu display style directly
+            const menuState = await PAGE.evaluate(() => {
+                const menu = document.getElementById('chatMenu');
+                if (!menu) return { exists: false };
+                const style = window.getComputedStyle(menu);
+                return {
+                    exists: true,
+                    hasOpenClass: menu.classList.contains('open'),
+                    display: style.display,
+                    top: menu.style.top,
+                    left: menu.style.left
+                };
+            });
+
+            if (menuState.hasOpenClass) {
+                await log('Options button opens menu', 'PASS', `display: ${menuState.display}`);
+
+                const menu = await PAGE.$('#chatMenu');
                 const items = await menu.$$('button');
                 const itemTexts = await Promise.all(items.map(i => i.textContent()));
                 await log('Menu items', 'PASS', itemTexts.map(t => t.trim()).join(', '));
@@ -258,6 +285,7 @@ async function testSidebarHoverMenus() {
                 // Close menu by clicking outside
                 await PAGE.click('body', { position: { x: 10, y: 10 } });
             } else {
+                await log('Options button opens menu', 'FAIL', `exists: ${menuState.exists}, hasOpen: ${menuState.hasOpenClass}, display: ${menuState.display}`);
                 await screenshot('menu-not-open');
             }
         }
