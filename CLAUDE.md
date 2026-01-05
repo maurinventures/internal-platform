@@ -1,10 +1,61 @@
 # Claude Code Rules for MV Internal
 
-## Model
+**Last Updated:** 2026-01-04 21:30 EST
 
-**Use Claude Sonnet 4** (`claude-sonnet-4-20250514`) for all tasks on this project.
+---
 
-Only use Opus 4.5 if explicitly requested or if Sonnet fails on a complex task.
+## MODEL REQUIREMENT
+
+**Use Claude Sonnet 4** (`claude-sonnet-4-20250514`) for all tasks.
+
+**Opus 4.5 is too expensive.** Only use if explicitly requested.
+
+---
+
+## SESSION START — REQUIRED CONFIRMATION
+
+At the START of every session, Claude Code must:
+
+### 1. Confirm Model
+
+```
+✅ Model: Claude Sonnet 4 (claude-sonnet-4-20250514)
+```
+
+If using Opus, STOP and switch to Sonnet unless user explicitly approved Opus.
+
+### 2. Confirm Task Understanding
+
+Before writing ANY code or running ANY command:
+
+```
+📋 TASK CONFIRMATION
+
+I will:
+1. [First thing I will do]
+2. [Second thing I will do]
+3. [Third thing I will do]
+
+Files I will modify:
+- path/to/file1.html
+- path/to/file2.py
+
+I will NOT:
+- [Anything out of scope]
+
+Proceed? (yes/no)
+```
+
+Wait for user confirmation before proceeding.
+
+### 3. Read CLAUDE.md
+
+```
+✅ Read CLAUDE.md
+✅ SSH_HOST: mv-internal
+✅ DOMAIN: maurinventuresinternal.com
+✅ Will follow one-change-at-a-time rule
+```
 
 ---
 
@@ -80,10 +131,10 @@ Save to project root. User will send to auditor.
 | Route | URL |
 |-------|-----|
 | Home | `https://maurinventuresinternal.com/chat` |
-| Recents | `https://maurinventuresinternal.com/chat/recents` |
-| Projects list | `https://maurinventuresinternal.com/chat/projects` |
-| Single project | `https://maurinventuresinternal.com/project/{id}` |
-| Single chat | `https://maurinventuresinternal.com/chat/{id}` |
+| Chats List | `https://maurinventuresinternal.com/chat/recents` |
+| Projects List | `https://maurinventuresinternal.com/projects` |
+| Single Project | `https://maurinventuresinternal.com/project/{id}` |
+| Single Chat | `https://maurinventuresinternal.com/chat/{id}` |
 
 ---
 
@@ -219,6 +270,75 @@ After ANY backend change, verify:
 - [ ] Service restarts without error
 - [ ] `curl https://maurinventuresinternal.com/chat` returns 200
 - [ ] API endpoints return expected data
+
+---
+
+## AUTOMATED SITE AUDIT
+
+Run the full site audit after any significant UI changes or before major releases.
+
+### Setup (one-time)
+
+```bash
+cd ~/video-management
+npm install playwright
+npx playwright install chromium
+mkdir -p tests test-results
+```
+
+### Get Session Cookie
+
+1. Open https://maurinventuresinternal.com in browser
+2. DevTools (F12) → Application → Cookies
+3. Copy `session` cookie value
+4. Update `AUTH_COOKIE.value` in `tests/full-site-audit.js`
+
+### Run Audit
+
+```bash
+node tests/full-site-audit.js
+```
+
+### Review Results
+
+```bash
+# Summary in terminal
+# Detailed results:
+cat test-results/audit-results.json
+
+# Screenshots of failures:
+ls test-results/*.png
+```
+
+### When to Run
+
+| Situation | Run Audit? |
+|-----------|------------|
+| After fixing navigation bugs | ✅ Yes |
+| After changing sidebar | ✅ Yes |
+| After adding new routes | ✅ Yes |
+| After CSS-only changes | ⚠️ Optional |
+| Before marking feature complete | ✅ Yes |
+| After deployment to verify | ✅ Yes |
+
+### What It Tests
+
+- Sidebar navigation (all links go to correct URLs)
+- Chats page (lists chats, count accurate)
+- Projects page (loads, lists projects)
+- Chat functionality (header, share, dropdown)
+- Sidebar hover menus (••• button, menu opens)
+- All internal links (no 404s)
+
+### Fixing Failures
+
+After audit, failures are listed with details. Fix ONE at a time:
+
+1. Read the failure message
+2. Find the relevant code (`grep`)
+3. Fix it
+4. Deploy
+5. Re-run audit to confirm
 
 ---
 
