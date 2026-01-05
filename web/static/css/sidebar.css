@@ -273,6 +273,25 @@
     flex: 1;
 }
 
+/* Utility classes for layout and avatar styling */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.rounded-full { border-radius: 50%; }
+.font-bold { font-weight: bold; }
+.select-none { user-select: none; }
+.h-9 { height: 36px; }
+.w-9 { width: 36px; }
+.text-\\[16px\\] { font-size: 16px; }
+.border-0\\.5 { border-width: 0.5px; }
+.border-transparent { border-color: transparent; }
+.bg-text-200 { background-color: var(--color-text); }
+.text-bg-100 { color: var(--color-bg); }
+.text-text-200 { color: var(--color-text-secondary); }
+.border-border-200 { border-color: var(--color-border); }
+.group-hover\\:border-border-200:hover { border-color: var(--color-border); }
+.group-hover\\:opacity-90:hover { opacity: 0.9; }
+
 /* Utility classes for icon animations */
 .shrink-0 { flex-shrink: 0; }
 .text-always-white { color: white !important; }
