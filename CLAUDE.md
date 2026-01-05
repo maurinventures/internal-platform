@@ -1,6 +1,6 @@
 # Claude Code Rules for MV Internal
 
-**Last Updated:** 2026-01-05 08:20 UTC
+**Last Updated:** 2026-01-05 09:15 UTC
 
 ---
 
@@ -22,6 +22,167 @@ claude
 
 ---
 
+## 🛑 CRITICAL: NO BREAKING CHANGES RULE 🛑
+
+### Before ANY code change, you MUST:
+
+1. **TEST THE CURRENT STATE FIRST**
+   ```bash
+   # Verify what currently works BEFORE touching anything
+   curl -s https://maurinventuresinternal.com/chat | head -20
+   curl -s https://maurinventuresinternal.com/chat/recents | head -20
+   curl -s https://maurinventuresinternal.com/projects | head -20
+   ```
+
+2. **IDENTIFY EXACTLY WHAT YOU'RE CHANGING**
+   - List EVERY file you will modify
+   - List EVERY function you will change
+   - List EVERY CSS class you will modify
+
+3. **PRESERVE WORKING FUNCTIONALITY**
+   - If chat sending works → it MUST still work after
+   - If sidebar renders → it MUST still render after
+   - If navigation works → it MUST still work after
+
+4. **ONE SMALL CHANGE AT A TIME**
+   - Make ONE change
+   - Deploy and TEST
+   - Confirm it works
+   - THEN make the next change
+
+### NEVER do these in a single session:
+- ❌ Refactor multiple files at once
+- ❌ Change both HTML structure AND CSS at the same time
+- ❌ Modify backend AND frontend simultaneously
+- ❌ "While I'm here, let me also fix..."
+
+---
+
+## 🔒 PROTECTED FILES — EXTRA CAUTION REQUIRED
+
+These files are CRITICAL. Breaking them breaks the entire app:
+
+| File | What it does | Extra review required |
+|------|--------------|----------------------|
+| `web/app.py` | All routes and API | YES - test every endpoint |
+| `web/templates/base.html` | Master layout | YES - affects ALL pages |
+| `web/templates/_sidebar.html` | Sidebar | YES - appears everywhere |
+| `web/static/js/shared.js` | Core JavaScript | YES - all interactivity |
+| `web/static/css/base.css` | Core styles | YES - affects everything |
+
+### Before modifying a PROTECTED FILE:
+
+```
+⚠️ PROTECTED FILE MODIFICATION
+
+File: [filename]
+Current behavior I am PRESERVING:
+1. [Thing that works now]
+2. [Another thing that works]
+3. [Another thing]
+
+Specific change I am making:
+- [Exact change, line numbers if possible]
+
+I confirm this change will NOT break:
+- [ ] Chat sending
+- [ ] Chat loading
+- [ ] Sidebar rendering
+- [ ] Navigation
+- [ ] API endpoints
+
+Proceed? (yes/no)
+```
+
+---
+
+## 🧪 MANDATORY TESTING PROTOCOL
+
+### After EVERY deployment:
+
+```bash
+# 1. Check service is running
+ssh mv-internal "sudo systemctl status mv-internal"
+
+# 2. Check for Python errors
+ssh mv-internal "sudo journalctl -u mv-internal -n 20 --no-pager"
+
+# 3. Test critical pages load
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/chat
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/chat/recents
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/projects
+
+# 4. Test API endpoints
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/api/conversations
+```
+
+### If ANY test fails:
+1. STOP immediately
+2. Check logs for error
+3. ROLLBACK if needed
+4. Do NOT continue with more changes
+
+---
+
+## 📋 CHANGE SIZE LIMITS
+
+| Change Type | Max Files | Max Lines Changed | Requires |
+|-------------|-----------|-------------------|----------|
+| Bug fix | 1-2 | <50 | Test after |
+| Small feature | 2-3 | <100 | Test after |
+| UI tweak | 1-2 | <30 | Visual check |
+| Refactor | 1 | <50 | STOP - too risky |
+| "Make it like X" | N/A | N/A | BREAK INTO PHASES |
+
+### If user asks for large changes:
+
+```
+⚠️ LARGE CHANGE DETECTED
+
+This request would modify [X] files and [Y] lines.
+
+To prevent breaking the app, I recommend:
+
+Phase 1: [Small specific change]
+- Files: [list]
+- Test: [how to verify]
+
+Phase 2: [Next small change]
+- Files: [list]  
+- Test: [how to verify]
+
+[etc.]
+
+Which phase should I start with?
+```
+
+---
+
+## 🔄 ROLLBACK PROCEDURE — KNOW THIS BY HEART
+
+If ANYTHING breaks after a deploy:
+
+```bash
+# 1. Check what broke
+ssh mv-internal "sudo journalctl -u mv-internal -n 50 --no-pager"
+
+# 2. See recent commits
+git log --oneline -5
+
+# 3. Revert the last commit
+git revert HEAD --no-edit
+git push origin main
+
+# 4. Redeploy
+ssh mv-internal "cd ~/video-management && git pull && rsync -av ~/video-management/ ~/mv-internal/ --exclude='.git' --exclude='__pycache__' --exclude='*.pyc'"
+ssh mv-internal "sudo systemctl restart mv-internal"
+
+# 5. Verify fixed
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/chat
+```
+
+---
+
 ## SESSION START — REQUIRED CONFIRMATION
 
 At the START of every session, output:
@@ -32,71 +193,61 @@ At the START of every session, output:
 📋 TASK CONFIRMATION
 
 I will:
-1. [First thing]
-2. [Second thing]
-3. [Third thing]
+1. [First thing - SPECIFIC]
+2. [Second thing - SPECIFIC]
 
 Files I will modify:
-- path/to/file.html
+- path/to/file.html (lines X-Y)
 
-I will NOT:
-- [Out of scope items]
+I will NOT touch:
+- [Files staying unchanged]
+
+Current functionality I am PRESERVING:
+- [Thing that works now]
+- [Another thing that works]
+
+Risk level: LOW / MEDIUM / HIGH
 
 Proceed? (yes/no)
 ```
 
 **Wait for user confirmation before proceeding.**
 
-**MANDATORY:** After user confirmation, immediately explore the current codebase structure relative to CLAUDE.md guidelines using the Task tool with subagent_type=Explore.
-
 ---
 
-## SESSION LOGGING — DO NOT BLOAT THE REPO
+## 🚫 BANNED PATTERNS
 
-### ⚠️ IMPORTANT: Logs go in `/logs` folder, NOT project root
+### Never do these:
 
-```bash
-# CORRECT - logs folder (gitignored)
-mkdir -p logs
-logs/session_20260105_081500.md
+```python
+# ❌ BAD: Changing function signature that's called elsewhere
+def get_config(key, default):  # Was: def get_config()
 
-# WRONG - project root (bloats repo)
-session_20260105_081500.md  # ❌ DO NOT CREATE HERE
+# ❌ BAD: Renaming CSS classes without updating all references  
+.chat-input-box  # Was: .input-box
+
+# ❌ BAD: Changing HTML structure that JS depends on
+<div class="new-structure">  # JS expects old structure
+
+# ❌ BAD: Removing code "to clean up"
+# Deleted unused function  # It wasn't unused!
+
+# ❌ BAD: "Improving" working code
+# Refactored for clarity  # Now it's broken
 ```
 
-### Ensure .gitignore includes:
+### Always do these:
 
+```python
+# ✅ GOOD: Add new code, don't modify working code
+def get_config_v2(key, default):  # New function, old one still works
+
+# ✅ GOOD: Add CSS classes, don't rename existing
+.chat-input-box-new { }  # New class, old one still works
+
+# ✅ GOOD: Test before AND after
+# Tested: chat loads, messages send, sidebar renders
 ```
-logs/
-session_*.md
-```
-
-### When to create session logs
-
-| Situation | Create Log? |
-|-----------|-------------|
-| Major feature completed | ✅ Yes |
-| Complex bug fix | ✅ Yes |
-| Small single-file change | ❌ No |
-| Quick config tweak | ❌ No |
-| User says "skip the log" | ❌ No |
-
-### Log format (keep it brief)
-
-```bash
-mkdir -p logs
-cat > "logs/session_$(date +%Y%m%d_%H%M%S).md" << 'EOF'
-# Session: [DATE]
-## Summary
-[1-2 sentences max]
-## Changes
-- file.html: [brief description]
-## Status
-Working / Needs follow-up
-EOF
-```
-
-**NO verbose templates. Keep logs SHORT.**
 
 ---
 
@@ -136,160 +287,58 @@ EOF
 
 ---
 
-## ARCHITECTURE — SINGLE SOURCE OF TRUTH
-
-### Principle
-
-Every component, style, and data source must be defined **ONCE** and reused everywhere.
-
-### Template Architecture
-
-| File | Purpose |
-|------|---------|
-| `base.html` | Master layout — ALL templates extend this |
-| `_sidebar.html` | Sidebar partial — included in base.html |
-| `_dropdown_menu.html` | Shared dropdown — included in base.html |
-
-**Pattern:**
-```html
-<!-- base.html includes shared components ONCE -->
-{% include '_sidebar.html' %}
-
-<!-- Every page extends base.html -->
-{% extends 'base.html' %}
-{% block content %}...{% endblock %}
-```
-
-### CSS Architecture
-
-| File | Purpose |
-|------|---------|
-| `base.css` | Variables, reset, typography |
-| `sidebar.css` | Sidebar styles ONLY |
-| `components.css` | Buttons, inputs, cards, menus |
-
-**Rules:**
-- NO inline `<style>` blocks
-- NO duplicate CSS across files
-- One component = one place in CSS
-
-### JavaScript Architecture
-
-- ALL shared code in `shared.js`
-- Use event delegation for dynamic elements
-- No inline `onclick` handlers
-
-### Flask Architecture
-
-```python
-def get_sidebar_data():
-    """Call in EVERY route"""
-    return {
-        'recent_projects': get_projects_with_recent_chats(),
-        'standalone_chats': get_standalone_recent_chats(),
-        'user': get_current_user()
-    }
-
-def render_with_sidebar(template, active_page, **kwargs):
-    context = get_sidebar_data()
-    context['active_page'] = active_page
-    context.update(kwargs)
-    return render_template(template, **context)
-
-# All routes use this:
-@app.route('/videos')
-def videos():
-    return render_with_sidebar('videos.html', active_page='videos', videos=get_all_videos())
-```
-
----
-
-## RULES — DO NOT VIOLATE
-
-### Rule 1: NEVER INVENT
-
-Never invent hostnames, paths, endpoints, CSS classes. If not in this file or existing code, **ASK**.
-
-### Rule 2: VERIFY BEFORE EXECUTE
+## CANONICAL DEPLOY SEQUENCE
 
 ```bash
-echo "Will run: ssh $SSH_HOST ..."
-# Then execute
-```
+# 1. Commit with SPECIFIC message
+git add -A && git commit -m "Fix: [exact thing fixed]"
 
-### Rule 3: CANONICAL DEPLOY SEQUENCE
-
-```bash
-git add -A && git commit -m "Description"
+# 2. Push
 git push origin main
+
+# 3. Deploy
 ssh mv-internal "cd ~/video-management && git pull && rsync -av ~/video-management/ ~/mv-internal/ --exclude='.git' --exclude='__pycache__' --exclude='*.pyc'"
+
+# 4. Restart
 ssh mv-internal "sudo systemctl restart mv-internal"
+
+# 5. VERIFY (mandatory)
+curl -s -o /dev/null -w "%{http_code}" https://maurinventuresinternal.com/chat
+ssh mv-internal "sudo journalctl -u mv-internal -n 10 --no-pager"
 ```
-
-### Rule 4: ONE CHANGE AT A TIME
-
-Never batch multiple unrelated changes.
-
-### Rule 5: NO DUPLICATION
-
-Before adding code, check if similar exists:
-```bash
-grep -rn "pattern" web/
-```
-
-### Rule 6: CSS/HTML CONSISTENCY
-
-```bash
-grep -n "\.classname" web/templates/*.html web/static/css/*.css
-```
-
-### Rule 7: SERVER-SIDE RENDERING FOR SIDEBAR
-
-Sidebar must be Jinja-rendered, not JavaScript-fetched.
-
-### Rule 8: PARTIALS FOR SHARED COMPONENTS
-
-Any HTML on multiple pages → extract to partial.
 
 ---
 
-## TESTING CHECKLIST
+## SESSION LOGGING
 
-After ANY change:
-
-- [ ] Hard refresh `/chat` — no console errors
-- [ ] Sidebar renders immediately — no jitter
-- [ ] Sidebar IDENTICAL on all pages
-- [ ] Service restarts without error
-
----
-
-## SESSION END — REQUIRED VALIDATION
-
-At the END of every session, **MANDATORY:**
-
-Explore the current codebase structure relative to CLAUDE.md guidelines using the Task tool with subagent_type=Explore to verify:
-
-- [ ] Architecture principles are still being followed
-- [ ] No new duplication was introduced
-- [ ] All changes align with established patterns
-- [ ] Single source of truth maintained
-- [ ] Template/CSS/JS structure remains consistent
-
-Output a brief validation summary of adherence to CLAUDE.md guidelines.
-
----
-
-## ROLLBACK PROCEDURE
+### Logs go in `/logs` folder, NOT project root
 
 ```bash
-ssh mv-internal "sudo journalctl -u mv-internal -n 50 --no-pager"
-git log --oneline -10
-git revert HEAD --no-edit
-git push origin main
-ssh mv-internal "cd ~/video-management && git pull && rsync -av ~/video-management/ ~/mv-internal/ --exclude='.git' --exclude='__pycache__' --exclude='*.pyc'"
-ssh mv-internal "sudo systemctl restart mv-internal"
+mkdir -p logs
+# logs/session_20260105_081500.md
 ```
+
+### When to create session logs
+
+| Situation | Create Log? |
+|-----------|-------------|
+| Major feature completed | ✅ Yes |
+| Complex bug fix | ✅ Yes |
+| Small single-file change | ❌ No |
+| Quick config tweak | ❌ No |
+
+---
+
+## DEBUGGING
+
+| Symptom | Check |
+|---------|-------|
+| SSH fails | ~/.ssh/config |
+| Service won't start | `sudo journalctl -u mv-internal -n 50` |
+| Changes not appearing | Did you restart service? |
+| Sidebar inconsistent | Must use `_sidebar.html` partial |
+| API returns error | Check app.py function signatures |
+| JS not working | Check browser console, verify selectors exist |
 
 ---
 
@@ -304,43 +353,10 @@ Host mv-internal
 
 ---
 
-## DEBUGGING
+## EMERGENCY CONTACTS
 
-| Symptom | Check |
-|---------|-------|
-| SSH fails | ~/.ssh/config |
-| Service won't start | `sudo journalctl -u mv-internal -n 50` |
-| Changes not appearing | Did you restart service? |
-| Sidebar inconsistent | Must use `_sidebar.html` partial |
+If everything is broken and you can't fix it:
 
----
-
-## SECRETS
-
-```bash
-# Decrypt
-openssl aes-256-cbc -d -pbkdf2 -in config/credentials.yaml.enc -out config/credentials.yaml
-
-# Re-encrypt
-openssl aes-256-cbc -salt -pbkdf2 -in config/credentials.yaml -out config/credentials.yaml.enc
-```
-
----
-
-## CLEANUP TASKS
-
-### Remove existing session logs from repo root
-
-```bash
-# Move existing logs to logs folder
-mkdir -p logs
-mv session_*.md logs/ 2>/dev/null
-
-# Add to gitignore if not already
-echo "logs/" >> .gitignore
-echo "session_*.md" >> .gitignore
-
-# Commit cleanup
-git add -A && git commit -m "Move session logs to /logs folder, update gitignore"
-git push origin main
-```
+1. STOP making changes
+2. Document what broke
+3. User will restore from backup or fix manually
