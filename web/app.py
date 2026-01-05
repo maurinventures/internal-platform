@@ -244,10 +244,13 @@ def index():
 @app.route('/videos')
 def videos():
     """List all videos."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = UUID(session['user_id'])
     search_query = request.args.get('q', '').strip()
 
-    with DatabaseSession() as session:
-        query = session.query(Video)
+    with DatabaseSession() as db_session:
+        query = db_session.query(Video)
 
         if search_query:
             search_filter = f'%{search_query}%'
@@ -261,7 +264,7 @@ def videos():
         videos = query.order_by(Video.created_at.desc()).all()
         video_list = []
         for v in videos:
-            transcript = session.query(Transcript).filter(
+            transcript = db_session.query(Transcript).filter(
                 Transcript.video_id == v.id,
                 Transcript.status == "completed"
             ).first()
@@ -281,16 +284,23 @@ def videos():
                 'extra_data': getattr(v, 'extra_data', None) or {},
             })
 
-    return render_template('videos.html', videos=video_list, search_query=search_query)
+    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
+    return render_template('videos.html', videos=video_list, search_query=search_query,
+                         sidebar_projects=sidebar_projects,
+                         sidebar_conv_groups=conv_groups,
+                         sidebar_conv_ungrouped=conv_ungrouped)
 
 
 @app.route('/audio')
 def audio():
     """List all audio recordings."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = UUID(session['user_id'])
     search_query = request.args.get('q', '').strip()
 
-    with DatabaseSession() as session:
-        query = session.query(AudioRecording)
+    with DatabaseSession() as db_session:
+        query = db_session.query(AudioRecording)
 
         if search_query:
             search_filter = f'%{search_query}%'
@@ -304,7 +314,7 @@ def audio():
         audio_list = []
         for a in recordings:
             # Count segments for this recording
-            segment_count = session.query(AudioSegment).filter(
+            segment_count = db_session.query(AudioSegment).filter(
                 AudioSegment.audio_id == a.id
             ).count()
             audio_list.append({
@@ -319,7 +329,11 @@ def audio():
                 's3_key': a.s3_key,
             })
 
-    return render_template('audio.html', recordings=audio_list, search_query=search_query)
+    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
+    return render_template('audio.html', recordings=audio_list, search_query=search_query,
+                         sidebar_projects=sidebar_projects,
+                         sidebar_conv_groups=conv_groups,
+                         sidebar_conv_ungrouped=conv_ungrouped)
 
 
 @app.route('/api/audio')
@@ -343,15 +357,19 @@ def api_audio_list():
 @app.route('/transcripts')
 def transcripts():
     """List all transcripts."""
-    with DatabaseSession() as session:
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = UUID(session['user_id'])
+
+    with DatabaseSession() as db_session:
         transcript_list = []
-        transcripts = session.query(Transcript).filter(
+        transcripts = db_session.query(Transcript).filter(
             Transcript.status == "completed"
         ).order_by(Transcript.created_at.desc()).all()
 
         for t in transcripts:
-            video = session.query(Video).filter(Video.id == t.video_id).first()
-            segment_count = session.query(TranscriptSegment).filter(
+            video = db_session.query(Video).filter(Video.id == t.video_id).first()
+            segment_count = db_session.query(TranscriptSegment).filter(
                 TranscriptSegment.transcript_id == t.id
             ).count()
             transcript_list.append({
@@ -362,7 +380,11 @@ def transcripts():
                 'created_at': t.created_at,
             })
 
-    return render_template('transcripts.html', transcripts=transcript_list)
+    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
+    return render_template('transcripts.html', transcripts=transcript_list,
+                         sidebar_projects=sidebar_projects,
+                         sidebar_conv_groups=conv_groups,
+                         sidebar_conv_ungrouped=conv_ungrouped)
 
 
 @app.route('/transcripts/<transcript_id>')
@@ -1836,6 +1858,10 @@ def api_ai_log_detail(log_id):
 @app.route('/personas')
 def personas():
     """List all personas (voice profiles)."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = UUID(session['user_id'])
+
     with DatabaseSession() as db_session:
         persona_list = db_session.query(Persona).filter(Persona.is_active == 1).order_by(Persona.name).all()
 
@@ -1858,7 +1884,11 @@ def personas():
                 'created_at': p.created_at
             })
 
-    return render_template('personas.html', personas=personas_data)
+    sidebar_projects, conv_groups, conv_ungrouped = get_sidebar_data(user_id)
+    return render_template('personas.html', personas=personas_data,
+                         sidebar_projects=sidebar_projects,
+                         sidebar_conv_groups=conv_groups,
+                         sidebar_conv_ungrouped=conv_ungrouped)
 
 
 @app.route('/personas/<persona_id>')
