@@ -67,7 +67,10 @@
     background: transparent;
     border: none;
     border-radius: 0;
-    font-size: 0.875rem;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+    letter-spacing: normal;
     color: #444;
     cursor: pointer;
     font-family: inherit;
@@ -116,7 +119,10 @@
     background: transparent;
     border: none;
     border-radius: 0;
-    font-size: 0.875rem;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 430;
+    letter-spacing: normal;
     color: #444;
     cursor: pointer;
     font-family: inherit;
@@ -164,7 +170,10 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 430;
+    letter-spacing: normal;
     color: #444;
 }
 
@@ -198,7 +207,10 @@
     display: flex;
     width: 100%;
     padding-left: 2.75rem;
-    font-size: 0.8125rem;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 430;
+    letter-spacing: normal;
 }
 
 .sidebar-divider {
@@ -250,13 +262,46 @@
 }
 
 .conversation-title {
-    font-size: 0.8125rem;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 430;
+    letter-spacing: normal;
     color: var(--color-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
 }
+
+/* Utility classes for icon animations */
+.shrink-0 { flex-shrink: 0; }
+.text-always-white { color: white !important; }
+.transition-all { transition: all 0.15s; }
+.ease-in-out { transition-timing-function: ease-in-out; }
+.duration-100 { transition-duration: 0.1s; }
+.transition { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 0.15s; }
+.transition-transform { transition-property: transform; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 0.15s; }
+.duration-200 { transition-duration: 0.2s; }
+.ease-snappy-out { transition-timing-function: cubic-bezier(0.25, 0, 0.4, 1); }
+.origin-center { transform-origin: center; }
+.backface-hidden { backface-visibility: hidden; }
+
+/* Group hover effects for sidebar icons */
+.group:hover .group-hover\\:scale-105 { transform: scale(1.05); }
+.group:hover .group-hover\\:-translate-x-\\[0\\.5px\\] { transform: translateX(-0.5px); }
+.group:hover .group-hover\\:translate-x-\\[0\\.5px\\] { transform: translateX(0.5px); }
+.group:hover .group-hover\\:scale-95 { transform: scale(0.95); }
+.group:hover .group-hover\\:-translate-y-\\[1\\.4px\\] { transform: translateY(-1.4px) translateX(0.5px) rotate(3deg); }
+.group:hover .group-hover\\:translate-x-\\[0\\.5px\\] { transform: translateX(0.5px); }
+.group:hover .group-hover\\:rotate-3 { transform: rotate(3deg); }
+.group:hover .group-hover\\:-translate-y-\\[2\\.8px\\] { transform: translateY(-2.8px) translateX(1px) rotate(6deg); }
+.group:hover .group-hover\\:translate-x-px { transform: translateX(1px); }
+.group:hover .group-hover\\:rotate-6 { transform: rotate(6deg); }
+.group:hover .group-hover\\:-rotate-90 { transform: rotate(-90deg); }
+.group:hover .group-hover\\:rotate-\\[120deg\\] { transform: rotate(120deg); }
+
+.group:active .group-active\\:translate-x-0 { transform: translateX(0px); }
+.group:active .group-active\\:translate-y-0 { transform: translateY(0px); }
 
 /* Chat item menu button (•••) */
 .chat-item-menu {
@@ -309,8 +354,10 @@
 }
 
 .recents-project-name {
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 430;
+    letter-spacing: normal;
     color: var(--color-text);
     flex: 1;
     white-space: nowrap;
