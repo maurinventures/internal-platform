@@ -231,11 +231,16 @@ async function testSidebarHoverMenus() {
     // Wait for scripts to fully initialize
     await PAGE.waitForTimeout(1000);
 
-    // Verify menuChatId is initialized
-    const menuReady = await PAGE.evaluate(() => {
-        return typeof menuChatId !== 'undefined' && typeof openChatMenu === 'function';
+    // Debug: check what functions are available (functions are hoisted to global)
+    const debugInfo = await PAGE.evaluate(() => {
+        return {
+            hasOpenChatMenu: typeof openChatMenu === 'function',
+            hasCloseChatMenu: typeof closeChatMenu === 'function',
+            hasChatMenuAction: typeof chatMenuAction === 'function',
+            hasShowToast: typeof showToast === 'function'
+        };
     });
-    console.log(`  DEBUG: Menu system ready: ${menuReady}`);
+    console.log(`  DEBUG: ${JSON.stringify(debugInfo)}`);
 
     // Find chat items in RECENTS
     const recentsItems = await PAGE.$$('.conversation-item');

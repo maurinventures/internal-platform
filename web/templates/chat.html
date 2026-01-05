@@ -3575,9 +3575,9 @@ let conversations = [];
 let isSelectMode = false;
 let selectedChats = new Set();
 
-// Chat menu state (defined early to avoid TDZ issues)
-let menuChatId = null;
-let menuChatTitle = null;
+// Chat menu state (using var for global scope accessibility)
+var menuChatId = null;
+var menuChatTitle = null;
 
 // Initialize based on route
 document.addEventListener('DOMContentLoaded', async () => {
