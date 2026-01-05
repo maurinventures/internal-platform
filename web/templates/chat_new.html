@@ -365,182 +365,142 @@
 
 <!-- New Claude.ai-style chat interface - shown for both new chat and conversation views -->
 {% if view == 'new' or view == 'conversation' %}
-<div class="chat-page{% if view == 'conversation' %} has-messages{% endif %}">
+<main class="claude-main">
     <!-- Welcome Section (shown when no messages) -->
-    <div class="chat-welcome" id="chatWelcome">
-        <div class="welcome-content">
-            <div class="welcome-icon">
-                <!-- Orange asterisk SVG -->
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                    <path d="M16 2L18.5 13.5L30 16L18.5 18.5L16 30L13.5 18.5L2 16L13.5 13.5L16 2Z" fill="#d97757"/>
-                </svg>
+    <div class="claude-welcome" id="chatWelcome">
+        <div class="claude-welcome-content">
+            <!-- Animated Claude Logo -->
+            <div class="claude-logo-section">
+                <div class="claude-logo-container">
+                    <svg overflow="visible" width="100%" height="100%" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg" class="claude-logo">
+                        <path d="M96.0000 40.0000 L99.5002 42.0000 L99.5002 43.5000 L98.5000 47.0000 L56.0000 57.0000 L52.0040 47.0708 L96.0000 40.0000 M96.0000 40.0000" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(330deg) scaleY(1.06) rotate(-330deg);"></path>
+                        <path d="M80.1032 10.5903 L84.9968 11.6171 L86.2958 13.2179 L87.5346 17.0540 L87.0213 19.5007 L58.5000 58.5000 L49.0000 49.0000 L75.3008 14.4873 L80.1032 10.5903 M80.1032 10.5903" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(300deg) scaleY(0.999918) rotate(-300deg);"></path>
+                        <path d="M55.5002 4.5000 L58.5005 2.5000 L61.0002 3.5000 L63.5002 7.0000 L56.6511 48.1620 L52.0005 45.0000 L50.0005 39.5000 L53.5003 8.5000 L55.5002 4.5000 M55.5002 4.5000" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(270deg) scaleY(1.02158) rotate(-270deg);"></path>
+                        <path d="M23.4253 5.1588 L26.5075 1.2217 L28.5175 0.7632 L32.5063 1.3458 L34.4748 2.8868 L48.8202 34.6902 L54.0089 49.8008 L47.9378 53.1760 L24.8009 11.1886 L23.4253 5.1588 M23.4253 5.1588" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(240deg) scaleY(1.23825) rotate(-240deg);"></path>
+                        <path d="M8.4990 27.0019 L7.4999 23.0001 L10.5003 19.5001 L14.0003 20.0001 L15.0003 20.0001 L36.0000 35.5000 L42.5000 40.5000 L51.5000 47.5000 L46.5000 56.0000 L42.0002 52.5000 L39.0001 49.5000 L10.0000 29.0001 L8.4990 27.0019 M8.4990 27.0019" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(210deg) scaleY(1.26008) rotate(-210deg);"></path>
+                        <path d="M2.5003 53.0000 L0.2370 50.5000 L0.2373 48.2759 L2.5003 47.5000 L28.0000 49.0000 L53.0000 51.0000 L52.1885 55.9782 L4.5000 53.5000 L2.5003 53.0000 M2.5003 53.0000" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(180deg) scaleY(1.13342) rotate(-180deg);"></path>
+                        <path d="M17.5002 79.0264 L12.5005 79.0264 L10.5124 76.7369 L10.5124 74.0000 L19.0005 68.0000 L53.5082 46.0337 L57.0005 52.0000 L17.5002 79.0264 M17.5002 79.0264" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(150deg) scaleY(1.08175) rotate(-150deg);"></path>
+                        <path d="M27.0004 92.9999 L25.0003 93.4999 L22.0003 91.9999 L22.5004 89.4999 L52.0003 50.5000 L56.0004 55.9999 L34.0003 85.0000 L27.0004 92.9999 M27.0004 92.9999" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(120deg) scaleY(0.997) rotate(-120deg);"></path>
+                        <path d="M51.9998 98.0000 L50.5002 100.0000 L47.5002 101.0000 L45.0001 99.0000 L43.5000 96.0000 L51.0003 55.4999 L55.5001 55.9999 L51.9998 98.0000 M51.9998 98.0000" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(90deg) scaleY(0.97) rotate(-90deg);"></path>
+                        <path d="M77.5007 86.9997 L77.5007 90.9997 L77.0006 92.4997 L75.0004 93.4997 L71.5006 93.0339 L47.4669 57.2642 L56.9998 50.0002 L64.9994 64.5004 L65.7507 69.7497 L77.5007 86.9997 M77.5007 86.9997" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(60deg) scaleY(1.045) rotate(-60deg);"></path>
+                        <path d="M89.0008 80.9991 L89.5008 83.4991 L88.0008 85.4991 L86.5007 84.9991 L78.0007 78.9991 L65.0007 67.4991 L55.0007 60.4991 L58.0000 51.0000 L62.9999 54.0001 L66.0007 59.4991 L89.0008 80.9991 M89.0008 80.9991" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(30deg) scaleY(0.925) rotate(-30deg);"></path>
+                        <path d="M82.5003 55.5000 L95.0003 56.5000 L98.0003 58.5000 L100.0000 61.5000 L100.0000 63.6587 L94.5003 66.0000 L66.5005 59.0000 L55.0003 58.5000 L58.0000 48.0000 L66.0005 54.0000 L82.5003 55.5000 M82.5003 55.5000" fill="currentColor" class="logo-path" style="transform-origin: 50px 50px; transform: rotate(0deg) scaleY(0.955) rotate(0deg);"></path>
+                    </svg>
+                </div>
+                <div class="claude-greeting-text">
+                    <div>Coffee and Claude time?</div>
+                </div>
             </div>
-            <h1 class="welcome-greeting" id="welcomeGreeting">Good afternoon, {{ user.name or 'Joy' }}</h1>
         </div>
     </div>
 
     <!-- Messages Container (hidden initially) -->
     <div class="chat-messages" id="chatMessages"></div>
 
-    <!-- Input Section (always visible, at bottom) -->
-    <div class="chat-input-section">
-        <div class="chat-input-wrapper">
-            <div class="chat-input-box" id="chatInputBox">
-                <textarea
-                    id="chatInput"
-                    class="chat-textarea"
-                    placeholder="How can I help you today?"
-                    rows="1"
-                ></textarea>
+    <!-- Input Section (always visible) -->
+    <div class="claude-input-section">
+        <div class="claude-input-wrapper">
+            <!-- Main input container -->
+            <div class="claude-input-container">
+                <div class="claude-input-box" id="chatInputBox">
+                    <div class="claude-input-content">
+                        <div class="claude-textarea-wrapper">
+                            <div contenteditable="true"
+                                 role="textbox"
+                                 id="chatInput"
+                                 class="claude-textarea"
+                                 data-placeholder="How can I help you today?"
+                                 enterkeyhint="enter"
+                                 aria-label="Write your prompt to Claude"
+                                 aria-multiline="true"></div>
+                            <div class="claude-placeholder">How can I help you today?</div>
+                        </div>
 
-                <div class="chat-input-controls">
-                    <div class="controls-left">
-                        <button type="button" id="attachBtn" class="control-btn" title="Add content">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                        </button>
-                        <button type="button" id="historyBtn" class="control-btn" title="Recent">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+                        <div class="claude-input-controls">
+                            <div class="controls-left">
+                                <button type="button" id="attachBtn" class="claude-control-btn" title="Toggle menu">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10 3C10.2761 3 10.5 3.22386 10.5 3.5V9.5H16.5L16.6006 9.50977C16.8286 9.55629 17 9.75829 17 10C17 10.2417 16.8286 10.4437 16.6006 10.4902L16.5 10.5H10.5V16.5C10.5 16.7761 10.2761 17 10 17C9.72386 17 9.5 16.7761 9.5 16.5V10.5H3.5C3.22386 10.5 3 10.2761 3 10C3 9.72386 3.22386 9.5 3.5 9.5H9.5V3.5C9.5 3.22386 9.72386 3 10 3Z"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" id="thinkingBtn" class="claude-control-btn" title="Extended thinking">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10.3857 2.50977C14.3486 2.71054 17.5 5.98724 17.5 10C17.5 14.1421 14.1421 17.5 10 17.5C5.85786 17.5 2.5 14.1421 2.5 10C2.5 9.72386 2.72386 9.5 3 9.5C3.27614 9.5 3.5 9.72386 3.5 10C3.5 13.5899 6.41015 16.5 10 16.5C13.5899 16.5 16.5 13.5899 16.5 10C16.5 6.5225 13.7691 3.68312 10.335 3.50879L10 3.5L9.89941 3.49023C9.67145 3.44371 9.5 3.24171 9.5 3C9.5 2.72386 9.72386 2.5 10 2.5L10.3857 2.50977ZM10 5.5C10.2761 5.5 10.5 5.72386 10.5 6V9.69043L13.2236 11.0527C13.4706 11.1762 13.5708 11.4766 13.4473 11.7236C13.3392 11.9397 13.0957 12.0435 12.8711 11.9834L12.7764 11.9473L9.77637 10.4473C9.60698 10.3626 9.5 10.1894 9.5 10V6C9.5 5.72386 9.72386 5.5 10 5.5Z"></path>
+                                    </svg>
+                                </button>
+                            </div>
 
-                    <div class="controls-right">
-                        <div class="model-selector" id="modelSelector">
-                            <button type="button" class="model-selector-btn" id="modelSelectorBtn">
-                                <span class="model-name">Sonnet 4</span>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </button>
+                            <div class="controls-right">
+                                <!-- Model Selector -->
+                                <div class="claude-model-selector">
+                                    <button type="button" class="claude-model-btn" id="modelSelectorBtn">
+                                        <span class="model-name">Haiku 4.5</span>
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M14.128 7.16482C14.3126 6.95983 14.6298 6.94336 14.835 7.12771C15.0402 7.31242 15.0567 7.62952 14.8721 7.83477L10.372 12.835L10.2939 12.9053C10.2093 12.9667 10.1063 13 9.99995 13C9.85833 12.9999 9.72264 12.9402 9.62788 12.835L5.12778 7.83477L5.0682 7.75273C4.95072 7.55225 4.98544 7.28926 5.16489 7.12771C5.34445 6.96617 5.60969 6.95939 5.79674 7.09744L5.87193 7.16482L9.99995 11.7519L14.128 7.16482Z"></path>
+                                        </svg>
+                                    </button>
+                                </div>
 
-                            <!-- Model Dropdown -->
-                            <div class="model-dropdown" id="modelDropdown">
-                                <button type="button" class="model-option" data-model="opus-4.5">
-                                    <div class="model-info">
-                                        <span class="model-option-name">Opus 4.5</span>
-                                        <span class="model-option-desc">Most capable for complex work</span>
-                                    </div>
-                                    <span class="model-check">✓</span>
-                                </button>
-                                <button type="button" class="model-option selected" data-model="sonnet-4">
-                                    <div class="model-info">
-                                        <span class="model-option-name">Sonnet 4</span>
-                                        <span class="model-option-desc">Best for everyday tasks</span>
-                                    </div>
-                                    <span class="model-check">✓</span>
-                                </button>
-                                <button type="button" class="model-option" data-model="haiku-4.5">
-                                    <div class="model-info">
-                                        <span class="model-option-name">Haiku 4.5</span>
-                                        <span class="model-option-desc">Fastest for quick answers</span>
-                                    </div>
-                                    <span class="model-check">✓</span>
-                                </button>
-                                <div class="dropdown-divider"></div>
-                                <button type="button" class="model-option more-models">
-                                    <span>More models</span>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                <!-- Send Button -->
+                                <button type="button" id="sendBtn" class="claude-send-btn" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256">
+                                        <path d="M208.49,120.49a12,12,0,0,1-17,0L140,69V216a12,12,0,0,1-24,0V69L64.49,120.49a12,12,0,0,1-17-17l72-72a12,12,0,0,1,17,0l72,72A12,12,0,0,1,208.49,120.49Z"></path>
                                     </svg>
                                 </button>
                             </div>
                         </div>
-
-                        <button type="button" id="sendBtn" class="send-btn" disabled>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <line x1="12" y1="19" x2="12" y2="5"></line>
-                                <polyline points="5 12 12 5 19 12"></polyline>
-                            </svg>
-                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Attachment Menu Dropdown -->
-            <div class="attach-dropdown" id="attachDropdown">
-                <button type="button" class="attach-option" data-action="add-files">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                    </svg>
-                    <span>Add files or photos</span>
-                </button>
-                <button type="button" class="attach-option" data-action="screenshot">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 16 10 5 21"></polyline>
-                    </svg>
-                    <span>Take a screenshot</span>
-                </button>
-                <button type="button" class="attach-option has-submenu" data-action="add-to-project">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span>Add to project</span>
-                    <svg class="submenu-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                </button>
-                <div class="dropdown-divider"></div>
-                <button type="button" class="attach-option" data-action="research">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    <span>Research</span>
-                </button>
-                <button type="button" class="attach-option" data-action="web-search">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                    </svg>
-                    <span>Web search</span>
-                    <span class="option-check">✓</span>
-                </button>
-                <button type="button" class="attach-option has-submenu" data-action="use-style">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                    </svg>
-                    <span>Use style</span>
-                    <svg class="submenu-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                </button>
+            <!-- Category tabs -->
+            <div class="claude-categories">
+                <ul class="claude-category-tabs">
+                    <li class="claude-category-tab">
+                        <button class="claude-category-btn" data-category="write">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                                <path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"></path>
+                            </svg>
+                            <span>Write</span>
+                        </button>
+                    </li>
+                    <li class="claude-category-tab">
+                        <button class="claude-category-btn" data-category="learn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                                <path d="M251.76,88.94l-120-64a8,8,0,0,0-7.52,0l-120,64a8,8,0,0,0,0,14.12L32,117.87v48.42a15.91,15.91,0,0,0,4.06,10.65C49.16,191.53,78.51,216,128,216a130,130,0,0,0,48-8.76V240a8,8,0,0,0,16,0V199.51a115.63,115.63,0,0,0,27.94-22.57A15.91,15.91,0,0,0,224,166.29V117.87l27.76-14.81a8,8,0,0,0,0-14.12ZM128,200c-43.27,0-68.72-21.14-80-33.71V126.4l76.24,40.66a8,8,0,0,0,7.52,0L176,143.47v46.34C163.4,195.69,147.52,200,128,200Zm80-33.75a97.83,97.83,0,0,1-16,14.25V134.93l16-8.53ZM188,118.94l-.22-.13-56-29.87a8,8,0,0,0-7.52,14.12L171,128l-43,22.93L25,96,128,41.07,231,96Z"></path>
+                            </svg>
+                            <span>Learn</span>
+                        </button>
+                    </li>
+                    <li class="claude-category-tab">
+                        <button class="claude-category-btn" data-category="code">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                                <path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"></path>
+                            </svg>
+                            <span>Code</span>
+                        </button>
+                    </li>
+                    <li class="claude-category-tab">
+                        <button class="claude-category-btn" data-category="life-stuff">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                                <path d="M80,56V24a8,8,0,0,1,16,0V56a8,8,0,0,1-16,0Zm40,8a8,8,0,0,0,8-8V24a8,8,0,0,0-16,0V56A8,8,0,0,0,120,64Zm32,0a8,8,0,0,0,8-8V24a8,8,0,0,0-16,0V56A8,8,0,0,0,152,64Zm96,56v8a40,40,0,0,1-37.51,39.91,96.59,96.59,0,0,1-27,40.09H208a8,8,0,0,1,0,16H32a8,8,0,0,1,0-16H56.54A96.3,96.3,0,0,1,24,136V88a8,8,0,0,1,8-8H208A40,40,0,0,1,248,120ZM200,96H40v40a80.27,80.27,0,0,0,45.12,72h69.76A80.27,80.27,0,0,0,200,136Zm32,24a24,24,0,0,0-16-22.62V136a95.78,95.78,0,0,1-1.2,15A24,24,0,0,0,232,128Z"></path>
+                            </svg>
+                            <span>Life stuff</span>
+                        </button>
+                    </li>
+                    <li class="claude-category-tab">
+                        <button class="claude-category-btn" data-category="claude-choice">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                                <path d="M176,232a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,232Zm40-128a87.55,87.55,0,0,1-33.64,69.21A16.24,16.24,0,0,0,176,186v6a16,16,0,0,1-16,16H96a16,16,0,0,1-16-16v-6a16,16,0,0,0-6.23-12.66A87.59,87.59,0,0,1,40,104.49C39.74,56.83,78.26,17.14,125.88,16A88,88,0,0,1,216,104Zm-16,0a72,72,0,0,0-73.74-72c-39,.92-70.47,33.39-70.26,72.39a71.65,71.65,0,0,0,27.64,56.3A32,32,0,0,1,96,186v6h64v-6a32.15,32.15,0,0,1,12.47-25.35A71.65,71.65,0,0,0,200,104Zm-16.11-9.34a57.6,57.6,0,0,0-46.56-46.55,8,8,0,0,0-2.66,15.78c16.57,2.79,30.63,16.85,33.44,33.45A8,8,0,0,0,176,104a9,9,0,0,0,1.35-.11A8,8,0,0,0,183.89,94.66Z"></path>
+                            </svg>
+                            <span>Claude's choice</span>
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
-
-        <!-- Quick Action Chips -->
-        <div class="quick-actions" id="quickActions">
-            <button type="button" class="quick-action-chip" data-action="write">
-                <span class="chip-icon">✏️</span>
-                <span>Write</span>
-            </button>
-            <button type="button" class="quick-action-chip" data-action="learn">
-                <span class="chip-icon">📚</span>
-                <span>Learn</span>
-            </button>
-            <button type="button" class="quick-action-chip" data-action="code">
-                <span class="chip-icon">&lt;/&gt;</span>
-                <span>Code</span>
-            </button>
-            <button type="button" class="quick-action-chip" data-action="life-stuff">
-                <span class="chip-icon">🎯</span>
-                <span>Life stuff</span>
-            </button>
-            <button type="button" class="quick-action-chip" data-action="claude-choice">
-                <span class="chip-icon">✨</span>
-                <span>Claude's choice</span>
-            </button>
-        </div>
     </div>
-</div>
+</main>
 {% endif %}
 
 
