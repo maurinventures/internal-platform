@@ -124,6 +124,208 @@ def video_delete(video_id: str, keep_s3: bool):
         sys.exit(1)
 
 
+@video.command("health-check")
+@click.option("--fix", is_flag=True, help="Attempt to fix issues found")
+def video_health_check(fix: bool):
+    """Check video health (S3 sync, metadata consistency)."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+
+    config = get_config()
+    s3_client = boto3.client('s3')
+    session = DatabaseSession()
+
+    try:
+        # Get all videos from DB
+        result = session.execute(text("SELECT id, filename, s3_key, file_size_bytes, status FROM video"))
+        videos = result.fetchall()
+
+        issues_found = 0
+        issues_fixed = 0
+
+        click.echo("Video Health Check")
+        click.echo("=" * 50)
+        click.echo(f"Checking {len(videos)} videos...")
+        click.echo()
+
+        for video in videos:
+            video_id, filename, s3_key, db_file_size, status = video
+
+            # Check if S3 object exists
+            try:
+                s3_response = s3_client.head_object(Bucket=config.aws_s3_bucket, Key=s3_key)
+                s3_size = s3_response['ContentLength']
+
+                # Check size mismatch
+                if db_file_size != s3_size:
+                    click.echo(f"❌ {filename}: Size mismatch (DB: {db_file_size:,}, S3: {s3_size:,})")
+                    issues_found += 1
+
+                    if fix:
+                        # Update DB with S3 size
+                        session.execute(text("UPDATE video SET file_size_bytes = :size WHERE id = :id"),
+                                      {"size": s3_size, "id": video_id})
+                        click.echo(f"   ✅ Fixed: Updated DB size to {s3_size:,}")
+                        issues_fixed += 1
+
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    click.echo(f"❌ {filename}: S3 file missing ({s3_key})")
+                    issues_found += 1
+
+                    if fix and status != 'failed':
+                        # Mark as failed
+                        session.execute(text("UPDATE video SET status = 'failed' WHERE id = :id"),
+                                      {"id": video_id})
+                        click.echo(f"   ✅ Fixed: Marked as failed")
+                        issues_fixed += 1
+                else:
+                    click.echo(f"❌ {filename}: S3 error - {e}")
+                    issues_found += 1
+
+        if fix:
+            session.commit()
+
+        click.echo()
+        if issues_found == 0:
+            click.echo("✅ All videos healthy!")
+        else:
+            click.echo(f"Found {issues_found} issues.")
+            if fix:
+                click.echo(f"Fixed {issues_fixed} issues.")
+            else:
+                click.echo("Run with --fix to attempt repairs.")
+
+    except Exception as e:
+        click.echo(f"Health check failed: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@video.command("bulk-status")
+@click.argument("status")
+@click.option("--filter-current", "-f", help="Only change videos currently in this status")
+@click.confirmation_option(prompt="Are you sure you want to change video statuses?")
+def video_bulk_status(status: str, filter_current: Optional[str]):
+    """Bulk update video status."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+
+    session = DatabaseSession()
+    try:
+        # Build query
+        if filter_current:
+            query = "UPDATE video SET status = :new_status WHERE status = :current_status"
+            params = {"new_status": status, "current_status": filter_current}
+            description = f"videos with status '{filter_current}'"
+        else:
+            query = "UPDATE video SET status = :new_status"
+            params = {"new_status": status}
+            description = "all videos"
+
+        result = session.execute(text(query), params)
+        session.commit()
+
+        click.echo(f"Updated {result.rowcount} {description} to status '{status}'")
+
+    except Exception as e:
+        click.echo(f"Bulk status update failed: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@video.command("metadata-update")
+@click.option("--missing-only", is_flag=True, help="Only update videos with missing metadata")
+@click.option("--limit", "-l", default=10, help="Max videos to process")
+def video_metadata_update(missing_only: bool, limit: int):
+    """Update video metadata (duration, resolution, etc)."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+    import boto3
+    from scripts.config_loader import get_config
+    import tempfile
+    import subprocess
+    import json
+
+    config = get_config()
+    s3_client = boto3.client('s3')
+    session = DatabaseSession()
+
+    try:
+        # Find videos needing metadata updates
+        if missing_only:
+            query = """SELECT id, filename, s3_key FROM video
+                      WHERE (duration_seconds IS NULL OR resolution IS NULL)
+                      AND status = 'uploaded' LIMIT :limit"""
+        else:
+            query = "SELECT id, filename, s3_key FROM video WHERE status = 'uploaded' LIMIT :limit"
+
+        result = session.execute(text(query), {"limit": limit})
+        videos = result.fetchall()
+
+        if not videos:
+            click.echo("No videos need metadata updates.")
+            return
+
+        click.echo(f"Updating metadata for {len(videos)} videos...")
+
+        for video_id, filename, s3_key in videos:
+            click.echo(f"Processing {filename}...")
+
+            try:
+                # Download to temp file
+                with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix) as temp_file:
+                    s3_client.download_file(config.aws_s3_bucket, s3_key, temp_file.name)
+
+                    # Use ffprobe to get metadata
+                    cmd = [
+                        'ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams',
+                        temp_file.name
+                    ]
+
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        click.echo(f"   ❌ Failed to analyze {filename}")
+                        continue
+
+                    data = json.loads(result.stdout)
+
+                    # Extract metadata
+                    duration = float(data['format']['duration'])
+
+                    # Find video stream
+                    video_stream = next((s for s in data['streams'] if s['codec_type'] == 'video'), None)
+                    if video_stream:
+                        resolution = f"{video_stream['width']}x{video_stream['height']}"
+                    else:
+                        resolution = None
+
+                    # Update database
+                    session.execute(text("""
+                        UPDATE video SET duration_seconds = :duration, resolution = :resolution
+                        WHERE id = :id
+                    """), {"duration": duration, "resolution": resolution, "id": video_id})
+
+                    click.echo(f"   ✅ Updated: {duration:.1f}s, {resolution}")
+
+            except Exception as e:
+                click.echo(f"   ❌ Error processing {filename}: {e}")
+
+        session.commit()
+        click.echo("Metadata update completed!")
+
+    except Exception as e:
+        click.echo(f"Metadata update failed: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
 # ============ Transcription Commands ============
 
 @cli.group()
@@ -428,6 +630,203 @@ def compile_download(compiled_id: str, output: Optional[str]):
         sys.exit(1)
 
 
+# ============ S3 Commands ============
+
+@cli.group()
+def s3():
+    """AWS S3 operations."""
+    pass
+
+
+@s3.command("list-buckets")
+def s3_list_buckets():
+    """List all S3 buckets."""
+    import boto3
+    from botocore.exceptions import ClientError
+
+    try:
+        s3_client = boto3.client('s3')
+        response = s3_client.list_buckets()
+
+        click.echo("S3 Buckets:")
+        click.echo("-" * 50)
+        for bucket in response['Buckets']:
+            click.echo(f"  {bucket['Name']} (created: {bucket['CreationDate'].strftime('%Y-%m-%d %H:%M:%S')})")
+    except ClientError as e:
+        click.echo(f"Failed to list buckets: {e}", err=True)
+        sys.exit(1)
+
+
+@s3.command("list-objects")
+@click.option("--bucket", "-b", help="S3 bucket name")
+@click.option("--prefix", "-p", default="", help="Object prefix filter")
+@click.option("--limit", "-l", default=50, help="Max objects to list")
+def s3_list_objects(bucket: Optional[str], prefix: str, limit: int):
+    """List objects in S3 bucket."""
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+
+    if not bucket:
+        config = get_config()
+        bucket = config.aws_s3_bucket
+
+    try:
+        s3_client = boto3.client('s3')
+        response = s3_client.list_objects_v2(
+            Bucket=bucket,
+            Prefix=prefix,
+            MaxKeys=limit
+        )
+
+        if 'Contents' not in response:
+            click.echo("No objects found.")
+            return
+
+        click.echo(f"Objects in {bucket} (prefix: '{prefix}'):")
+        click.echo(f"{'Key':<50} {'Size':<12} {'Modified':<20}")
+        click.echo("-" * 85)
+
+        for obj in response['Contents']:
+            size = f"{obj['Size']:,} bytes"
+            modified = obj['LastModified'].strftime('%Y-%m-%d %H:%M:%S')
+            click.echo(f"{obj['Key'][:48]:<50} {size:<12} {modified:<20}")
+
+        if response.get('IsTruncated'):
+            click.echo(f"\n... and more (showing first {limit})")
+
+    except ClientError as e:
+        click.echo(f"Failed to list objects: {e}", err=True)
+        sys.exit(1)
+
+
+@s3.command("download")
+@click.argument("s3_key")
+@click.option("--bucket", "-b", help="S3 bucket name")
+@click.option("--output", "-o", type=click.Path(), help="Local output path")
+def s3_download(s3_key: str, bucket: Optional[str], output: Optional[str]):
+    """Download file from S3."""
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+    from pathlib import Path
+
+    if not bucket:
+        config = get_config()
+        bucket = config.aws_s3_bucket
+
+    if not output:
+        output = Path(s3_key).name
+
+    try:
+        s3_client = boto3.client('s3')
+        click.echo(f"Downloading {bucket}/{s3_key} to {output}...")
+        s3_client.download_file(bucket, s3_key, output)
+
+        # Show file info
+        file_path = Path(output)
+        size_mb = file_path.stat().st_size / 1024 / 1024
+        click.echo(f"Downloaded successfully! ({size_mb:.2f} MB)")
+
+    except ClientError as e:
+        click.echo(f"Failed to download: {e}", err=True)
+        sys.exit(1)
+
+
+@s3.command("upload-file")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--bucket", "-b", help="S3 bucket name")
+@click.option("--key", "-k", help="S3 key (defaults to filename)")
+def s3_upload_file(file_path: str, bucket: Optional[str], key: Optional[str]):
+    """Upload file directly to S3."""
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+    from pathlib import Path
+
+    if not bucket:
+        config = get_config()
+        bucket = config.aws_s3_bucket
+
+    if not key:
+        key = Path(file_path).name
+
+    try:
+        s3_client = boto3.client('s3')
+        file_size = Path(file_path).stat().st_size
+        size_mb = file_size / 1024 / 1024
+
+        click.echo(f"Uploading {file_path} to {bucket}/{key} ({size_mb:.2f} MB)...")
+        s3_client.upload_file(file_path, bucket, key)
+        click.echo("Upload successful!")
+        click.echo(f"S3 URI: s3://{bucket}/{key}")
+
+    except ClientError as e:
+        click.echo(f"Failed to upload: {e}", err=True)
+        sys.exit(1)
+
+
+@s3.command("delete-object")
+@click.argument("s3_key")
+@click.option("--bucket", "-b", help="S3 bucket name")
+@click.confirmation_option(prompt="Are you sure you want to delete this object?")
+def s3_delete_object(s3_key: str, bucket: Optional[str]):
+    """Delete object from S3."""
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+
+    if not bucket:
+        config = get_config()
+        bucket = config.aws_s3_bucket
+
+    try:
+        s3_client = boto3.client('s3')
+        s3_client.delete_object(Bucket=bucket, Key=s3_key)
+        click.echo(f"Deleted {bucket}/{s3_key}")
+
+    except ClientError as e:
+        click.echo(f"Failed to delete: {e}", err=True)
+        sys.exit(1)
+
+
+@s3.command("info")
+@click.argument("s3_key")
+@click.option("--bucket", "-b", help="S3 bucket name")
+def s3_info(s3_key: str, bucket: Optional[str]):
+    """Get object metadata from S3."""
+    import boto3
+    from botocore.exceptions import ClientError
+    from scripts.config_loader import get_config
+
+    if not bucket:
+        config = get_config()
+        bucket = config.aws_s3_bucket
+
+    try:
+        s3_client = boto3.client('s3')
+        response = s3_client.head_object(Bucket=bucket, Key=s3_key)
+
+        click.echo(f"S3 Object Info: {bucket}/{s3_key}")
+        click.echo("-" * 50)
+        click.echo(f"Size: {response['ContentLength']:,} bytes ({response['ContentLength'] / 1024 / 1024:.2f} MB)")
+        click.echo(f"Content Type: {response.get('ContentType', 'N/A')}")
+        click.echo(f"Last Modified: {response['LastModified'].strftime('%Y-%m-%d %H:%M:%S')}")
+        click.echo(f"ETag: {response['ETag']}")
+
+        if response.get('Metadata'):
+            click.echo("Metadata:")
+            for key, value in response['Metadata'].items():
+                click.echo(f"  {key}: {value}")
+
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            click.echo(f"Object not found: {bucket}/{s3_key}", err=True)
+        else:
+            click.echo(f"Failed to get object info: {e}", err=True)
+        sys.exit(1)
+
+
 # ============ Database Commands ============
 
 @cli.group()
@@ -456,6 +855,270 @@ def db_test():
     except Exception as e:
         click.echo(f"Database connection failed: {e}", err=True)
         sys.exit(1)
+
+
+@db.command("stats")
+def db_stats():
+    """Show database statistics."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+
+    session = DatabaseSession()
+    try:
+        # Table counts
+        tables_info = [
+            ("Videos", "video", ["status"]),
+            ("Transcripts", "transcript", ["status", "provider"]),
+            ("TranscriptSegments", "transcript_segment", []),
+            ("Clips", "clip", ["status"]),
+            ("CompiledVideos", "compiled_video", ["status"]),
+            ("Conversations", "conversation", []),
+            ("ChatMessages", "chat_message", ["role"]),
+            ("Users", "user", ["is_admin", "is_active"]),
+            ("Projects", "project", []),
+            ("Personas", "persona", [])
+        ]
+
+        click.echo("Database Statistics")
+        click.echo("=" * 50)
+
+        for table_name, table, breakdown_cols in tables_info:
+            try:
+                # Get total count
+                result = session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                total = result.scalar()
+                click.echo(f"{table_name}: {total:,}")
+
+                # Get breakdown by status/other columns
+                for col in breakdown_cols:
+                    try:
+                        result = session.execute(text(f"SELECT {col}, COUNT(*) FROM {table} WHERE {col} IS NOT NULL GROUP BY {col} ORDER BY COUNT(*) DESC"))
+                        breakdown = result.fetchall()
+                        if breakdown:
+                            click.echo(f"  By {col}:")
+                            for value, count in breakdown:
+                                click.echo(f"    {value}: {count:,}")
+                    except Exception:
+                        pass
+                click.echo()
+            except Exception as e:
+                click.echo(f"{table_name}: Error - {e}")
+                click.echo()
+
+    except Exception as e:
+        click.echo(f"Failed to get statistics: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@db.command("query")
+@click.argument("sql_query")
+@click.option("--limit", "-l", default=100, help="Limit results")
+@click.option("--format", "-f", type=click.Choice(["table", "json", "csv"]), default="table", help="Output format")
+def db_query(sql_query: str, limit: int, format: str):
+    """Execute SQL query and display results."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+    import json
+
+    session = DatabaseSession()
+    try:
+        # Add LIMIT if not present and limit > 0
+        query = sql_query.strip()
+        if limit > 0 and not query.upper().contains(" LIMIT "):
+            query += f" LIMIT {limit}"
+
+        result = session.execute(text(query))
+
+        if result.returns_rows:
+            rows = result.fetchall()
+            if not rows:
+                click.echo("No results found.")
+                return
+
+            columns = list(result.keys())
+
+            if format == "json":
+                data = [dict(zip(columns, row)) for row in rows]
+                click.echo(json.dumps(data, indent=2, default=str))
+            elif format == "csv":
+                # Header
+                click.echo(",".join(columns))
+                # Data
+                for row in rows:
+                    escaped_values = []
+                    for value in row:
+                        str_val = str(value) if value is not None else ""
+                        if "," in str_val or '"' in str_val:
+                            str_val = '"' + str_val.replace('"', '""') + '"'
+                        escaped_values.append(str_val)
+                    click.echo(",".join(escaped_values))
+            else:  # table format
+                # Calculate column widths
+                col_widths = {}
+                for i, col in enumerate(columns):
+                    max_width = max(len(col), max(len(str(row[i])) for row in rows))
+                    col_widths[i] = min(max_width, 50)  # Cap at 50 chars
+
+                # Header
+                header_row = " | ".join(col.ljust(col_widths[i]) for i, col in enumerate(columns))
+                click.echo(header_row)
+                click.echo("-" * len(header_row))
+
+                # Data
+                for row in rows:
+                    data_row = " | ".join(str(row[i])[:col_widths[i]].ljust(col_widths[i]) for i in range(len(columns)))
+                    click.echo(data_row)
+
+            click.echo(f"\n({len(rows)} row(s))")
+        else:
+            # Non-SELECT query
+            click.echo(f"Query executed. Rows affected: {result.rowcount}")
+
+    except Exception as e:
+        click.echo(f"Query failed: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@db.command("backup-metadata")
+@click.option("--output", "-o", default="db_backup.json", help="Output JSON file")
+def db_backup_metadata(output: str):
+    """Backup database metadata to JSON."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+    import json
+    from datetime import datetime
+
+    session = DatabaseSession()
+    try:
+        backup_data = {
+            "backup_timestamp": datetime.now().isoformat(),
+            "tables": {}
+        }
+
+        tables = ["video", "transcript", "transcript_segment", "clip", "compiled_video",
+                 "conversation", "chat_message", "user", "project", "persona"]
+
+        for table in tables:
+            try:
+                result = session.execute(text(f"SELECT * FROM {table}"))
+                rows = result.fetchall()
+                columns = list(result.keys())
+
+                backup_data["tables"][table] = {
+                    "columns": columns,
+                    "row_count": len(rows),
+                    "data": [dict(zip(columns, row)) for row in rows]
+                }
+
+                click.echo(f"Backed up {table}: {len(rows)} rows")
+            except Exception as e:
+                click.echo(f"Failed to backup {table}: {e}")
+
+        with open(output, 'w') as f:
+            json.dump(backup_data, f, indent=2, default=str)
+
+        file_size = Path(output).stat().st_size / 1024 / 1024
+        click.echo(f"\nBackup completed: {output} ({file_size:.2f} MB)")
+
+    except Exception as e:
+        click.echo(f"Backup failed: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@db.command("users")
+@click.option("--active-only", is_flag=True, help="Show only active users")
+def db_users(active_only: bool):
+    """List users."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+
+    session = DatabaseSession()
+    try:
+        query = "SELECT username, email, is_admin, is_active, created_at, last_login_at FROM user"
+        if active_only:
+            query += " WHERE is_active = true"
+        query += " ORDER BY created_at DESC"
+
+        result = session.execute(text(query))
+        users = result.fetchall()
+
+        if not users:
+            click.echo("No users found.")
+            return
+
+        click.echo(f"{'Username':<20} {'Email':<30} {'Admin':<6} {'Active':<7} {'Created':<20} {'Last Login':<20}")
+        click.echo("-" * 110)
+
+        for user in users:
+            username, email, is_admin, is_active, created_at, last_login = user
+            admin_str = "Yes" if is_admin else "No"
+            active_str = "Yes" if is_active else "No"
+            created_str = created_at.strftime('%Y-%m-%d %H:%M') if created_at else "N/A"
+            login_str = last_login.strftime('%Y-%m-%d %H:%M') if last_login else "Never"
+
+            click.echo(f"{username:<20} {email:<30} {admin_str:<6} {active_str:<7} {created_str:<20} {login_str:<20}")
+
+    except Exception as e:
+        click.echo(f"Failed to list users: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
+
+
+@db.command("conversations")
+@click.option("--user", "-u", help="Filter by username")
+@click.option("--limit", "-l", default=20, help="Limit results")
+def db_conversations(user: Optional[str], limit: int):
+    """List recent conversations."""
+    from scripts.db import DatabaseSession
+    from sqlalchemy import text
+
+    session = DatabaseSession()
+    try:
+        query = """
+            SELECT c.id, c.title, u.username, c.created_at, c.updated_at,
+                   (SELECT COUNT(*) FROM chat_message WHERE conversation_id = c.id) as message_count
+            FROM conversation c
+            LEFT JOIN user u ON c.user_id = u.id
+        """
+        params = {}
+
+        if user:
+            query += " WHERE u.username = :username"
+            params["username"] = user
+
+        query += " ORDER BY c.updated_at DESC LIMIT :limit"
+        params["limit"] = limit
+
+        result = session.execute(text(query), params)
+        conversations = result.fetchall()
+
+        if not conversations:
+            click.echo("No conversations found.")
+            return
+
+        click.echo(f"{'ID':<36} {'Title':<30} {'User':<15} {'Messages':<9} {'Updated':<20}")
+        click.echo("-" * 115)
+
+        for conv in conversations:
+            conv_id, title, username, created_at, updated_at, msg_count = conv
+            title_display = (title[:27] + "...") if title and len(title) > 30 else (title or "Untitled")
+            username_display = username or "Unknown"
+            updated_str = updated_at.strftime('%Y-%m-%d %H:%M') if updated_at else "N/A"
+
+            click.echo(f"{str(conv_id):<36} {title_display:<30} {username_display:<15} {msg_count:<9} {updated_str:<20}")
+
+    except Exception as e:
+        click.echo(f"Failed to list conversations: {e}", err=True)
+        sys.exit(1)
+    finally:
+        session.close()
 
 
 # ============ Storyline Commands ============

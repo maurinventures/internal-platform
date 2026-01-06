@@ -178,15 +178,16 @@ Please change your password after your first login.
         return False
 
 
-app = Flask(__name__)
+# DISABLED: Web interface components (CLI-only mode)
+# app = Flask(__name__)
 
 # Session configuration - persistent sessions that survive browser close
 # Secret key is fixed so sessions persist across server restarts
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'mv-internal-secret-key-2026-change-in-production')
-app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
-app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = 604800  # 7 days in seconds
+# app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'mv-internal-secret-key-2026-change-in-production')
+# app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
+# app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS
+# app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# app.config['PERMANENT_SESSION_LIFETIME'] = 604800  # 7 days in seconds
 
 
 def format_duration(seconds):
@@ -206,44 +207,46 @@ def format_timestamp(dt):
     return dt.strftime("%b %d, %Y %H:%M")
 
 
-app.jinja_env.filters['duration'] = format_duration
-app.jinja_env.filters['timestamp'] = format_timestamp
+# DISABLED: Jinja filters for web interface
+# app.jinja_env.filters['duration'] = format_duration
+# app.jinja_env.filters['timestamp'] = format_timestamp
 
 
-# Authentication - require login for all routes except public ones
-PUBLIC_ROUTES = {'login', 'register', 'logout', 'verify_2fa', 'verify_email', 'setup_2fa_after_verify', 'static'}
+# DISABLED: Authentication middleware for web routes
+# PUBLIC_ROUTES = {'login', 'register', 'logout', 'verify_2fa', 'verify_email', 'setup_2fa_after_verify', 'static'}
 
-@app.before_request
-def require_login():
-    """Require authentication for all routes except public ones."""
-    # Allow public routes
-    if request.endpoint in PUBLIC_ROUTES:
-        return None
-
-    # Allow static files
-    if request.path.startswith('/static/'):
-        return None
-
-    # Check if user is logged in
-    if 'user_id' not in session:
-        # For API requests, return JSON error
-        if request.path.startswith('/api/'):
-            return jsonify({'error': 'Authentication required'}), 401
-        # For page requests, redirect to login
-        return redirect(url_for('login'))
-
-    return None
-
-
-@app.route('/')
-def index():
-    """Redirect to chat (requires login)."""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    return redirect(url_for('chat'))
+# @app.before_request
+# def require_login():
+#     """Require authentication for all routes except public ones."""
+#     # Allow public routes
+#     if request.endpoint in PUBLIC_ROUTES:
+#         return None
+#
+#     # Allow static files
+#     if request.path.startswith('/static/'):
+#         return None
+#
+#     # Check if user is logged in
+#     if 'user_id' not in session:
+#         # For API requests, return JSON error
+#         if request.path.startswith('/api/'):
+#             return jsonify({'error': 'Authentication required'}), 401
+#         # For page requests, redirect to login
+#         return redirect(url_for('login'))
+#
+#     return None
 
 
-@app.route('/videos')
+# DISABLED: Web routes (CLI-only mode)
+# @app.route('/')
+# def index():
+#     """Redirect to chat (requires login)."""
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+#     return redirect(url_for('chat'))
+
+
+# @app.route('/videos')
 def videos():
     """List all videos."""
     if 'user_id' not in session:
@@ -289,7 +292,7 @@ def videos():
     return render_with_sidebar('videos_new.html', 'videos', videos=video_list, search_query=search_query)
 
 
-@app.route('/audio')
+# @app.route('/audio')
 def audio():
     """List all audio recordings."""
     if 'user_id' not in session:
@@ -330,7 +333,7 @@ def audio():
     return render_with_sidebar('audio_new.html', 'audio', recordings=audio_list, search_query=search_query)
 
 
-@app.route('/api/audio')
+# @app.route('/api/audio')
 def api_audio_list():
     """API endpoint to list all audio recordings."""
     with DatabaseSession() as session:
@@ -348,7 +351,7 @@ def api_audio_list():
         })
 
 
-@app.route('/transcripts')
+# @app.route('/transcripts')
 def transcripts():
     """List all transcripts."""
     if 'user_id' not in session:
@@ -377,7 +380,7 @@ def transcripts():
     return render_with_sidebar('transcripts_new.html', 'transcripts', transcripts=transcript_list)
 
 
-@app.route('/transcripts/<transcript_id>')
+# @app.route('/transcripts/<transcript_id>')
 def transcript_detail(transcript_id):
     """View a single transcript with all segments."""
     with DatabaseSession() as session:
@@ -413,7 +416,7 @@ def transcript_detail(transcript_id):
                                   total_duration=float(video.duration_seconds) if video and video.duration_seconds else 0)
 
 
-@app.route('/transcripts/search')
+# @app.route('/transcripts/search')
 def search_transcripts():
     """Search across all transcripts."""
     query = request.args.get('q', '').strip()
@@ -1791,13 +1794,13 @@ def render_with_sidebar(template, active_page, **kwargs):
     return render_template(template, **context)
 
 
-@app.route('/test-shared')
+# @app.route('/test-shared')
 def test_shared():
     """Test route for new shared template structure."""
     return render_with_sidebar('test_shared.html', active_page='test')
 
 
-@app.route('/chat')
+# @app.route('/chat')
 def chat():
     """New chat - shows welcome screen for starting a new conversation."""
     # Support ?project=<id> to create new chat in a specific project
@@ -1805,7 +1808,7 @@ def chat():
     return render_with_sidebar('chat_new.html', 'new_chat', view='new', project_id=project_id)
 
 
-@app.route('/chat/recents')
+# @app.route('/chat/recents')
 def chat_recents():
     """Chat list - shows all recent conversations."""
     if 'user_id' not in session:
@@ -1830,25 +1833,25 @@ def chat_recents():
     return render_with_sidebar('chat_new.html', 'chats', view='recents', conversations=conversations_data)
 
 
-@app.route('/chat/<conversation_id>')
+# @app.route('/chat/<conversation_id>')
 def chat_conversation(conversation_id):
     """Specific conversation view."""
     return render_with_sidebar('chat_new.html', 'new_chat', view='conversation', conversation_id=conversation_id)
 
 
-@app.route('/new')
+# @app.route('/new')
 def new_chat():
     """Legacy /new route - redirect to /chat."""
     return redirect(url_for('chat'))
 
 
-@app.route('/projects')
+# @app.route('/projects')
 def projects_page():
     """Projects list page."""
     return render_with_sidebar('projects_new.html', 'projects')
 
 
-@app.route('/project/<project_id>')
+# @app.route('/project/<project_id>')
 def project_detail(project_id):
     """Project detail page."""
     if 'user_id' not in session:
@@ -1869,7 +1872,7 @@ def project_detail(project_id):
     return render_with_sidebar('project.html', 'projects', project_id=project_id)
 
 
-@app.route('/ai-logs')
+# @app.route('/ai-logs')
 def ai_logs():
     """View AI call logs for quality monitoring."""
     if 'user_id' not in session:
@@ -1877,7 +1880,7 @@ def ai_logs():
     return render_with_sidebar('ai_logs.html', 'ai_logs')
 
 
-@app.route('/api/ai-logs', methods=['GET'])
+# @app.route('/api/ai-logs', methods=['GET'])
 def api_ai_logs():
     """API endpoint to fetch AI logs with filtering."""
     if 'user_id' not in session:
@@ -1931,7 +1934,7 @@ def api_ai_logs():
         })
 
 
-@app.route('/api/ai-logs/<log_id>', methods=['GET'])
+# @app.route('/api/ai-logs/<log_id>', methods=['GET'])
 def api_ai_log_detail(log_id):
     """Get full details of a specific AI log entry."""
     if 'user_id' not in session:
@@ -1967,7 +1970,7 @@ def api_ai_log_detail(log_id):
 # PERSONAS MANAGEMENT
 # ============================================================================
 
-@app.route('/personas')
+# @app.route('/personas')
 def personas():
     """List all personas (voice profiles)."""
     if 'user_id' not in session:
@@ -1999,7 +2002,7 @@ def personas():
     return render_with_sidebar('personas_new.html', 'personas', personas=personas_data)
 
 
-@app.route('/personas/<persona_id>')
+# @app.route('/personas/<persona_id>')
 def persona_detail(persona_id):
     """View and edit a single persona."""
     with DatabaseSession() as db_session:
@@ -2019,7 +2022,7 @@ def persona_detail(persona_id):
                                   videos=videos)
 
 
-@app.route('/api/personas', methods=['GET'])
+# @app.route('/api/personas', methods=['GET'])
 def api_list_personas():
     """API: List all personas."""
     with DatabaseSession() as db_session:
@@ -2033,7 +2036,7 @@ def api_list_personas():
         } for p in personas])
 
 
-@app.route('/api/personas', methods=['POST'])
+# @app.route('/api/personas', methods=['POST'])
 def api_create_persona():
     """API: Create a new persona."""
     if 'user_id' not in session:
@@ -2072,7 +2075,7 @@ def api_create_persona():
         })
 
 
-@app.route('/api/personas/<persona_id>', methods=['PUT'])
+# @app.route('/api/personas/<persona_id>', methods=['PUT'])
 def api_update_persona(persona_id):
     """API: Update a persona."""
     if 'user_id' not in session:
@@ -2109,7 +2112,7 @@ def api_update_persona(persona_id):
         return jsonify({'success': True})
 
 
-@app.route('/api/personas/<persona_id>', methods=['DELETE'])
+# @app.route('/api/personas/<persona_id>', methods=['DELETE'])
 def api_delete_persona(persona_id):
     """API: Soft delete a persona."""
     if 'user_id' not in session:
@@ -2131,7 +2134,7 @@ def api_delete_persona(persona_id):
 # PROJECTS API
 # ============================================================
 
-@app.route('/api/projects', methods=['GET'])
+# @app.route('/api/projects', methods=['GET'])
 def api_list_projects():
     """API: List all projects for current user."""
     if 'user_id' not in session:
@@ -2161,7 +2164,7 @@ def api_list_projects():
         })
 
 
-@app.route('/api/projects', methods=['POST'])
+# @app.route('/api/projects', methods=['POST'])
 def api_create_project():
     """API: Create a new project."""
     if 'user_id' not in session:
@@ -2195,7 +2198,7 @@ def api_create_project():
         }), 201
 
 
-@app.route('/api/projects/<project_id>', methods=['GET'])
+# @app.route('/api/projects/<project_id>', methods=['GET'])
 def api_get_project(project_id):
     """API: Get project details with conversations."""
     if 'user_id' not in session:
@@ -2233,7 +2236,7 @@ def api_get_project(project_id):
         })
 
 
-@app.route('/api/projects/<project_id>', methods=['PUT'])
+# @app.route('/api/projects/<project_id>', methods=['PUT'])
 def api_update_project(project_id):
     """API: Update a project."""
     if 'user_id' not in session:
@@ -2283,7 +2286,7 @@ def api_update_project(project_id):
         })
 
 
-@app.route('/api/projects/<project_id>', methods=['DELETE'])
+# @app.route('/api/projects/<project_id>', methods=['DELETE'])
 def api_delete_project(project_id):
     """API: Delete a project. Use ?permanent=true for permanent deletion."""
     if 'user_id' not in session:
@@ -2313,7 +2316,7 @@ def api_delete_project(project_id):
         return jsonify({'success': True})
 
 
-@app.route('/api/conversations/<conversation_id>/project', methods=['PUT'])
+# @app.route('/api/conversations/<conversation_id>/project', methods=['PUT'])
 def api_set_conversation_project(conversation_id):
     """API: Assign a conversation to a project."""
     if 'user_id' not in session:
@@ -2351,7 +2354,7 @@ def api_set_conversation_project(conversation_id):
         return jsonify({'success': True, 'project_id': str(conversation.project_id) if conversation.project_id else None})
 
 
-@app.route('/login', methods=['GET', 'POST'])
+# @app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login page."""
     if request.method == 'POST':
@@ -2395,7 +2398,7 @@ def login():
     return render_template('login.html')
 
 
-@app.route('/verify-2fa', methods=['GET', 'POST'])
+# @app.route('/verify-2fa', methods=['GET', 'POST'])
 def verify_2fa():
     """2FA verification page."""
     if 'pending_2fa_user_id' not in session:
@@ -2438,7 +2441,7 @@ def verify_2fa():
     return render_template('verify_2fa.html', email=session.get('pending_2fa_email'))
 
 
-@app.route('/setup-2fa', methods=['GET', 'POST'])
+# @app.route('/setup-2fa', methods=['GET', 'POST'])
 def setup_2fa():
     """2FA setup page - requires login."""
     if 'user_id' not in session:
@@ -2503,14 +2506,14 @@ def generate_qr_base64(data):
     return 'data:image/png;base64,' + base64.b64encode(buffer.read()).decode()
 
 
-@app.route('/logout')
+# @app.route('/logout')
 def logout():
     """User logout."""
     session.clear()
     return redirect(url_for('login'))
 
 
-@app.route('/register', methods=['GET', 'POST'])
+# @app.route('/register', methods=['GET', 'POST'])
 def register():
     """User registration page with email verification."""
     if request.method == 'POST':
@@ -2565,7 +2568,7 @@ def register():
     return render_template('register.html')
 
 
-@app.route('/verify-email')
+# @app.route('/verify-email')
 def verify_email():
     """Email verification endpoint."""
     token = request.args.get('token', '')
@@ -2598,7 +2601,7 @@ def verify_email():
         return redirect(url_for('setup_2fa_after_verify'))
 
 
-@app.route('/setup-2fa-required', methods=['GET', 'POST'])
+# @app.route('/setup-2fa-required', methods=['GET', 'POST'])
 def setup_2fa_after_verify():
     """Mandatory 2FA setup after email verification."""
     if 'pending_2fa_setup_user_id' not in session:
@@ -2674,7 +2677,7 @@ def setup_2fa_after_verify():
 # CONVERSATION API ENDPOINTS
 # ============================================================================
 
-@app.route('/api/conversations', methods=['GET'])
+# @app.route('/api/conversations', methods=['GET'])
 def api_list_conversations():
     """List all conversations for the current user."""
     if 'user_id' not in session:
@@ -2703,7 +2706,7 @@ def api_list_conversations():
         })
 
 
-@app.route('/api/conversations', methods=['POST'])
+# @app.route('/api/conversations', methods=['POST'])
 def api_create_conversation():
     """Create a new conversation."""
     if 'user_id' not in session:
@@ -2753,7 +2756,7 @@ def api_create_conversation():
         })
 
 
-@app.route('/api/conversations/<conversation_id>', methods=['GET'])
+# @app.route('/api/conversations/<conversation_id>', methods=['GET'])
 def api_get_conversation(conversation_id):
     """Get a conversation with all messages."""
     if 'user_id' not in session:
@@ -2796,7 +2799,7 @@ def api_get_conversation(conversation_id):
         })
 
 
-@app.route('/api/conversations/<conversation_id>', methods=['PUT'])
+# @app.route('/api/conversations/<conversation_id>', methods=['PUT'])
 def api_update_conversation(conversation_id):
     """Update conversation title."""
     if 'user_id' not in session:
@@ -2821,7 +2824,7 @@ def api_update_conversation(conversation_id):
         return jsonify({'success': True})
 
 
-@app.route('/api/conversations/<conversation_id>/star', methods=['PUT'])
+# @app.route('/api/conversations/<conversation_id>/star', methods=['PUT'])
 def api_star_conversation(conversation_id):
     """Star or unstar a conversation."""
     if 'user_id' not in session:
@@ -2849,7 +2852,7 @@ def api_star_conversation(conversation_id):
         })
 
 
-@app.route('/api/conversations/<conversation_id>/generate-title', methods=['POST'])
+# @app.route('/api/conversations/<conversation_id>/generate-title', methods=['POST'])
 def api_generate_conversation_title(conversation_id):
     """Generate a title for a conversation using AI based on first message."""
     if 'user_id' not in session:
@@ -2895,7 +2898,7 @@ def api_generate_conversation_title(conversation_id):
         return jsonify({'success': True, 'title': title})
 
 
-@app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
+# @app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
 def api_delete_conversation(conversation_id):
     """Delete a conversation."""
     if 'user_id' not in session:
@@ -2920,7 +2923,7 @@ def api_delete_conversation(conversation_id):
 # COLLABORATION API ENDPOINTS
 # ============================================================================
 
-@app.route('/api/users/search', methods=['GET'])
+# @app.route('/api/users/search', methods=['GET'])
 def api_search_users():
     """Search users by name or email for inviting to conversations."""
     if 'user_id' not in session:
@@ -2946,7 +2949,7 @@ def api_search_users():
         })
 
 
-@app.route('/api/conversations/<conversation_id>/participants', methods=['GET'])
+# @app.route('/api/conversations/<conversation_id>/participants', methods=['GET'])
 def api_get_participants(conversation_id):
     """Get participants of a conversation."""
     if 'user_id' not in session:
@@ -3002,7 +3005,7 @@ def api_get_participants(conversation_id):
         return jsonify({'participants': result, 'is_collaborative': conversation.is_collaborative})
 
 
-@app.route('/api/conversations/<conversation_id>/invite', methods=['POST'])
+# @app.route('/api/conversations/<conversation_id>/invite', methods=['POST'])
 def api_invite_participant(conversation_id):
     """Invite a user to collaborate on a conversation."""
     if 'user_id' not in session:
@@ -3064,7 +3067,7 @@ def api_invite_participant(conversation_id):
         })
 
 
-@app.route('/api/conversations/<conversation_id>/leave', methods=['POST'])
+# @app.route('/api/conversations/<conversation_id>/leave', methods=['POST'])
 def api_leave_conversation(conversation_id):
     """Leave a conversation (for participants, not owners)."""
     if 'user_id' not in session:
@@ -3087,7 +3090,7 @@ def api_leave_conversation(conversation_id):
         return jsonify({'success': True})
 
 
-@app.route('/api/conversations/<conversation_id>/attachments', methods=['POST'])
+# @app.route('/api/conversations/<conversation_id>/attachments', methods=['POST'])
 def api_upload_attachment(conversation_id):
     """Upload file attachment to a conversation."""
     if 'user_id' not in session:
@@ -3173,7 +3176,7 @@ def api_upload_attachment(conversation_id):
             return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 
-@app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['GET'])
+# @app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['GET'])
 def api_get_clip_comments(conversation_id, clip_index):
     """Get comments on a specific clip."""
     if 'user_id' not in session:
@@ -3200,7 +3203,7 @@ def api_get_clip_comments(conversation_id, clip_index):
         })
 
 
-@app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['POST'])
+# @app.route('/api/clips/<conversation_id>/<int:clip_index>/comments', methods=['POST'])
 def api_add_clip_comment(conversation_id, clip_index):
     """Add a comment on a clip. Use @mv-video to request regeneration."""
     if 'user_id' not in session:
@@ -3248,7 +3251,7 @@ def api_add_clip_comment(conversation_id, clip_index):
         })
 
 
-@app.route('/api/clips/<conversation_id>/<int:clip_index>/regenerate', methods=['POST'])
+# @app.route('/api/clips/<conversation_id>/<int:clip_index>/regenerate', methods=['POST'])
 def api_regenerate_clip(conversation_id, clip_index):
     """Regenerate a specific clip based on feedback."""
     print(f"[DEBUG] Regenerate clip called: conversation={conversation_id}, clip_index={clip_index}")
@@ -3323,7 +3326,7 @@ Output format:
         })
 
 
-@app.route('/api/records/<conversation_id>/<int:record_index>/comments', methods=['POST'])
+# @app.route('/api/records/<conversation_id>/<int:record_index>/comments', methods=['POST'])
 def api_add_record_comment(conversation_id, record_index):
     """Add a comment on a record/narration section. Use @mv-video to request regeneration."""
     if 'user_id' not in session:
@@ -3370,7 +3373,7 @@ def api_add_record_comment(conversation_id, record_index):
         })
 
 
-@app.route('/api/records/<conversation_id>/<int:record_index>/regenerate', methods=['POST'])
+# @app.route('/api/records/<conversation_id>/<int:record_index>/regenerate', methods=['POST'])
 def api_regenerate_record(conversation_id, record_index):
     """Regenerate a narration/record section based on feedback."""
     if 'user_id' not in session:
@@ -3460,7 +3463,7 @@ Output ONLY the new narration text, nothing else. Do not include quotes or any o
         })
 
 
-@app.route('/api/chat', methods=['POST'])
+# @app.route('/api/chat', methods=['POST'])
 def api_chat():
     """Handle chat messages for script generation or copy generation."""
     try:
@@ -3681,7 +3684,7 @@ def api_chat():
         }), 500
 
 
-@app.route('/api/script-feedback', methods=['POST'])
+# @app.route('/api/script-feedback', methods=['POST'])
 def api_script_feedback():
     """Save user feedback on a generated script."""
     try:
@@ -3716,7 +3719,7 @@ def api_script_feedback():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/script-examples', methods=['GET'])
+# @app.route('/api/script-examples', methods=['GET'])
 def api_script_examples():
     """Get good script examples for few-shot learning."""
     try:
@@ -3740,7 +3743,7 @@ def api_script_examples():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/video-preview/<video_id>')
+# @app.route('/api/video-preview/<video_id>')
 def api_video_preview(video_id):
     """Get presigned S3 URL for video preview."""
     try:
@@ -3773,7 +3776,7 @@ def api_video_preview(video_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/audio-preview/<audio_id>')
+# @app.route('/api/audio-preview/<audio_id>')
 def api_audio_preview(audio_id):
     """Get presigned S3 URL for audio preview."""
     try:
@@ -3804,7 +3807,7 @@ def api_audio_preview(audio_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/audio-clip/<audio_id>')
+# @app.route('/api/audio-clip/<audio_id>')
 def api_audio_clip(audio_id):
     """Get audio clip info with presigned URL and time range for playback."""
     try:
@@ -3839,7 +3842,7 @@ def api_audio_clip(audio_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/chat/create-video', methods=['POST'])
+# @app.route('/api/chat/create-video', methods=['POST'])
 def api_create_video_from_chat():
     """Create video clips from chat-generated script."""
     data = request.json
@@ -3882,7 +3885,7 @@ def api_create_video_from_chat():
     })
 
 
-@app.route('/api/chat/export-script', methods=['POST'])
+# @app.route('/api/chat/export-script', methods=['POST'])
 def api_export_script():
     """Generate a downloadable script file."""
     from flask import Response
@@ -3938,7 +3941,7 @@ def api_export_script():
     )
 
 
-@app.route('/api/video-thumbnail/<video_id>')
+# @app.route('/api/video-thumbnail/<video_id>')
 def api_video_thumbnail(video_id):
     """Return pre-generated thumbnail from S3 (fast) or redirect to placeholder."""
     try:
@@ -3968,7 +3971,7 @@ def api_video_thumbnail(video_id):
         return '', 404
 
 
-@app.route('/api/clip-preview/<video_id>')
+# @app.route('/api/clip-preview/<video_id>')
 def api_clip_preview(video_id):
     """Return presigned URL for streaming preview - fast and reliable."""
     start_time = request.args.get('start', type=float, default=0)
@@ -4007,7 +4010,7 @@ def api_clip_preview(video_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/clip-download/<video_id>')
+# @app.route('/api/clip-download/<video_id>')
 def api_clip_download(video_id):
     """Download a clip at original quality."""
     import subprocess
@@ -4119,7 +4122,7 @@ def api_clip_download(video_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/video-download/<video_id>')
+# @app.route('/api/video-download/<video_id>')
 def api_video_download(video_id):
     """Download the full video."""
     try:
@@ -4152,7 +4155,7 @@ def api_video_download(video_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/transcript-segment/update', methods=['POST'])
+# @app.route('/api/transcript-segment/update', methods=['POST'])
 def api_update_transcript_segment():
     """Update transcript text for a specific segment by time range."""
     try:
@@ -4231,7 +4234,7 @@ def api_update_transcript_segment():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/transcripts/<transcript_id>/identify-speakers', methods=['POST'])
+# @app.route('/api/transcripts/<transcript_id>/identify-speakers', methods=['POST'])
 def api_identify_speakers(transcript_id):
     """Use AI to identify and label speakers in a transcript."""
     try:
@@ -4334,7 +4337,7 @@ Respond in JSON format:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/segments/<segment_id>/speaker', methods=['PUT'])
+# @app.route('/api/segments/<segment_id>/speaker', methods=['PUT'])
 def api_update_segment_speaker(segment_id):
     """Update speaker label for a segment."""
     try:
@@ -4358,7 +4361,7 @@ def api_update_segment_speaker(segment_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/videos/<video_id>/autofill', methods=['POST'])
+# @app.route('/api/videos/<video_id>/autofill', methods=['POST'])
 def api_autofill_video(video_id):
     """Use AI to auto-fill video metadata from transcript."""
     try:
@@ -4446,7 +4449,7 @@ If you can't determine a field, use empty string. Be concise."""
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/videos/<video_id>', methods=['PUT'])
+# @app.route('/api/videos/<video_id>', methods=['PUT'])
 def api_update_video(video_id):
     """Update video metadata."""
     try:
@@ -4504,7 +4507,7 @@ def api_update_video(video_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/videos/<video_id>', methods=['GET'])
+# @app.route('/api/videos/<video_id>', methods=['GET'])
 def api_get_video(video_id):
     """Get single video details."""
     try:
@@ -4533,7 +4536,7 @@ def api_get_video(video_id):
 ADMIN_EMAILS = ['joy@maurinventures.com']
 
 
-@app.route('/admin/invite', methods=['GET', 'POST'])
+# @app.route('/admin/invite', methods=['GET', 'POST'])
 def admin_invite():
     """Admin page to invite new users."""
     # Check if user is logged in
@@ -4589,5 +4592,6 @@ def admin_invite():
     return render_template('admin_invite.html')
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+# DISABLED: Flask app execution (CLI-only mode)
+# if __name__ == '__main__':
+#     app.run(host='0.0.0.0', port=5001, debug=True)
