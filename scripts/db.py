@@ -23,7 +23,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
-from .config_loader import get_config
+try:
+    from .config_loader import get_config
+except ImportError:
+    from config_loader import get_config
 
 Base = declarative_base()
 
