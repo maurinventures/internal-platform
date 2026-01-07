@@ -20,7 +20,7 @@ interface LibraryOverviewScreenProps {
   onLibraryHeaderClick?: () => void;
   onNewChat?: () => void;
   allChats?: Array<{ id: string; title: string; starred?: boolean; projectId?: string; lastModified?: number }>;
-  onChatSelect?: (chatId: string) => void;
+  onChatSelect?: (chatId: string | null) => void;
 }
 
 export function LibraryOverviewScreen({

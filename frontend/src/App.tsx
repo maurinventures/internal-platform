@@ -16,6 +16,7 @@ import { ProjectDetailScreen } from "./components/screens/project-detail-screen"
 import { PROJECTS, type Project } from "./data/projects";
 import { isInvitedUser } from "./data/invited-users";
 import { toast } from "sonner";
+import { type Chat } from "./types";
 
 // Session storage keys
 const SESSION_KEY = "resonance_session";
@@ -49,15 +50,6 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  starred?: boolean;
-  projectId?: string;
-  projectName?: string;
 }
 
 function App() {
@@ -216,9 +208,14 @@ function App() {
     setCurrentChatId(null);
   };
 
-  const handleChatSelect = (chatId: string) => {
+  const handleChatSelect = (chatId: string | null) => {
+    if (!chatId) {
+      setCurrentChatId(null);
+      return;
+    }
+
     const selectedChat = allChats.find(chat => chat.id === chatId);
-    
+
     // If chat belongs to a project, navigate to project detail view
     if (selectedChat?.projectId) {
       setSelectedProjectId(selectedChat.projectId);

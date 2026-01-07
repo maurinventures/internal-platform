@@ -25,17 +25,18 @@ import {
 } from "../ui/dialog";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { 
-  Star, 
-  Pencil, 
-  Archive, 
-  Trash2, 
-  ChevronDown, 
+import {
+  Star,
+  Pencil,
+  Archive,
+  Trash2,
+  ChevronDown,
   FolderPlus,
   Search,
   FolderInput
 } from "lucide-react";
 import type { ScriptGenerationData } from "../chat/script-generation-response";
+import { type Chat } from "../../types";
 
 interface Message {
   role: "user" | "assistant";
@@ -44,15 +45,6 @@ interface Message {
   scriptData?: ScriptGenerationData; // Optional script generation data
 }
 
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  starred?: boolean;
-  projectId?: string;
-  projectName?: string;
-  lastModified?: number; // Timestamp for sorting
-}
 
 interface ChatScreenProps {
   onProjectClick?: (projectId: string) => void;
@@ -62,7 +54,7 @@ interface ChatScreenProps {
   allChats: Chat[];
   setAllChats: React.Dispatch<React.SetStateAction<Chat[]>>;
   currentChatId?: string | null;
-  onChatSelect?: (chatId: string) => void;
+  onChatSelect?: (chatId: string | null) => void;
   onNewChat?: () => void;
 }
 
@@ -339,7 +331,7 @@ export function ChatScreen({
     }
   };
 
-  const handleChatSelect = (chatId: string) => {
+  const handleChatSelect = (chatId: string | null) => {
     if (onChatSelect) {
       onChatSelect(chatId);
     }
@@ -545,8 +537,6 @@ export function ChatScreen({
             // Mock owner - in production, fetch from API
             { id: "current-user", name: "You", email: "you@resonance.ai", initials: "YO", role: "owner" },
           ]}
-          linkSharing="restricted"
-          linkRole="viewer"
         />
       )}
 

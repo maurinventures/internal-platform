@@ -47,6 +47,7 @@ import { ChatInput } from "../chat/chat-input";
 import { ChatMessage } from "../chat/chat-message";
 import { LoadingMessage } from "../loading-message";
 import type { ScriptGenerationData, ScriptSegment } from "../chat/script-generation-response";
+import { type Chat } from "../../types";
 
 interface Message {
   role: "user" | "assistant";
@@ -55,20 +56,10 @@ interface Message {
   scriptData?: ScriptGenerationData; // Optional script generation data
 }
 
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  timestamp: string;
-  starred?: boolean;
-  projectId?: string;
-  projectName?: string;
-  lastModified?: number;
-}
 
 interface ProjectDetailScreenProps {
   projectId: string;
-  projectName: string;
+  projectName: string | undefined;
   onBack: () => void;
   onProjectClick?: (projectId: string) => void;
   onLibraryClick?: (libraryType: "videos" | "audio" | "transcripts" | "pdfs") => void;
@@ -78,7 +69,7 @@ interface ProjectDetailScreenProps {
   allChats: Chat[];
   setAllChats: React.Dispatch<React.SetStateAction<Chat[]>>;
   initialChatId?: string | null;
-  onChatSelect?: (chatId: string) => void;
+  onChatSelect?: (chatId: string | null) => void;
 }
 
 export function ProjectDetailScreen({
@@ -147,9 +138,9 @@ export function ProjectDetailScreen({
       id: newChatId,
       title: generateChatTitle(quickInput),
       messages: [userMessage],
-      timestamp: "Just now",
       projectId,
       projectName,
+      lastModified: Date.now(),
     };
     
     setAllChats(prev => [newChat, ...prev]);
@@ -337,7 +328,7 @@ export function ProjectDetailScreen({
     }
   };
 
-  const handleChatSelect = (chatId: string) => {
+  const handleChatSelect = (chatId: string | null) => {
     setCurrentChatId(chatId);
     if (onChatSelect) {
       onChatSelect(chatId);
@@ -711,7 +702,7 @@ export function ProjectDetailScreen({
                             <div className="flex-1">
                               <div className="text-[12px] mb-1">{chat.title}</div>
                               <div className="text-[11px] text-muted-foreground">
-                                {chat.timestamp}
+                                {chat.lastModified ? new Date(chat.lastModified).toLocaleDateString() : 'Just now'}
                               </div>
                             </div>
                             <DropdownMenu>

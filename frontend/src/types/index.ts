@@ -229,6 +229,22 @@ export interface ChatMessage {
   metadata?: any;
 }
 
+// Frontend Chat interface for local state management
+export interface Chat {
+  id: string;
+  title: string;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    timestamp: string;
+    scriptData?: any; // Optional script generation data
+  }>;
+  starred?: boolean;
+  projectId?: string;
+  projectName?: string;
+  lastModified?: number; // Timestamp for sorting
+}
+
 export interface ChatRequest {
   conversation_id?: string;
   message: string;

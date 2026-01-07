@@ -49,10 +49,10 @@ import { SettingsDialog } from "../settings-dialog";
 interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onNewChat: () => void;
+  onNewChat?: () => void;
   recentChats?: Array<{ id: string; title: string; starred?: boolean }>;
-  onChatSelect?: (chatId: string) => void;
-  currentChatId?: string;
+  onChatSelect?: (chatId: string | null) => void;
+  currentChatId?: string | null;
   onChatStar?: (chatId: string) => void;
   onChatRename?: (chatId: string, newTitle: string) => void;
   onChatAddToProject?: (chatId: string, projectName: string) => void;
@@ -167,7 +167,7 @@ export function Sidebar({
           <Button
             variant="default"
             size="icon"
-            onClick={onNewChat}
+            onClick={onNewChat || (() => {})}
           >
             <Plus className="h-5 w-5" />
           </Button>
@@ -206,7 +206,7 @@ export function Sidebar({
         <>
           {/* New Chat Button - Fixed */}
           <div className="p-2 pt-4 pb-4 flex-shrink-0">
-            <Button onClick={onNewChat} className="w-full justify-start gap-2 h-8 text-[12px]">
+            <Button onClick={onNewChat || (() => {})} className="w-full justify-start gap-2 h-8 text-[12px]">
               <Plus className="h-3.5 w-3.5" />
               New Chat
             </Button>

@@ -22,15 +22,8 @@ import {
 import { Label } from "../ui/label";
 import { type Project } from "../../data/projects";
 import { toast } from "sonner";
+import { type Chat } from "../../types";
 
-interface Chat {
-  id: string;
-  title: string;
-  starred?: boolean;
-  projectId?: string;
-  projectName?: string;
-  lastModified?: number;
-}
 
 interface ProjectsScreenProps {
   onProjectSelect?: (projectId: string) => void;
@@ -41,8 +34,8 @@ interface ProjectsScreenProps {
   onNewChat?: () => void;
   allChats?: Chat[];
   setAllChats?: React.Dispatch<React.SetStateAction<Chat[]>>;
-  onChatSelect?: (chatId: string) => void;
-  currentChatId?: string;
+  onChatSelect?: (chatId: string | null) => void;
+  currentChatId?: string | null;
   allProjects?: Project[];
   setAllProjects?: React.Dispatch<React.SetStateAction<Project[]>>;
 }
