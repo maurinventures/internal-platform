@@ -1,0 +1,208 @@
+"""
+Smoke Tests Workflow (Prompt 26)
+
+Runs production health checks after successful deployment.
+Can be triggered manually or automatically after deployment.
+"""
+
+name: Smoke Tests
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL to test (e.g., https://maurinventuresinternal.com)'
+        required: true
+        default: 'https://maurinventuresinternal.com'
+      timeout:
+        description: 'Request timeout in seconds'
+        required: false
+        default: '30'
+
+  # Automatic trigger after successful deployment
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches: [main]
+
+  # Schedule for regular health checks
+  schedule:
+    # Run every 2 hours during business hours (9 AM to 5 PM UTC)
+    - cron: '0 9-17/2 * * 1-5'
+
+jobs:
+  smoke-tests:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+
+    - name: Determine target URL
+      id: url
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "target_url=${{ github.event.inputs.target_url }}" >> $GITHUB_OUTPUT
+          echo "timeout=${{ github.event.inputs.timeout }}" >> $GITHUB_OUTPUT
+        else
+          echo "target_url=https://maurinventuresinternal.com" >> $GITHUB_OUTPUT
+          echo "timeout=30" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Wait for deployment to settle
+      if: github.event_name == 'workflow_run'
+      run: |
+        echo "Waiting 30 seconds for deployment to settle..."
+        sleep 30
+
+    - name: Run smoke tests
+      id: smoke_tests
+      run: |
+        python tests/smoke_tests.py \
+          --url "${{ steps.url.outputs.target_url }}" \
+          --timeout "${{ steps.url.outputs.timeout }}" \
+          --output smoke_test_results.json
+
+    - name: Upload smoke test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: smoke-test-results
+        path: smoke_test_results.json
+
+    - name: Parse results for summary
+      if: always()
+      run: |
+        if [ -f "smoke_test_results.json" ]; then
+          echo "## 🔍 Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Extract key metrics using Python
+          python -c "
+import json
+import sys
+
+try:
+    with open('smoke_test_results.json', 'r') as f:
+        results = json.load(f)
+
+    print(f'| Metric | Value |', file=sys.stderr)
+    print(f'|--------|-------|', file=sys.stderr)
+    print(f'| Target URL | {results[\"base_url\"]} |', file=sys.stderr)
+    print(f'| Tests Run | {results[\"total_tests\"]} |', file=sys.stderr)
+    print(f'| Passed | {results[\"passed\"]} ✅ |', file=sys.stderr)
+    print(f'| Failed | {results[\"failed\"]} ❌ |', file=sys.stderr)
+    print(f'| Success Rate | {results[\"success_rate\"]:.1f}% |', file=sys.stderr)
+    print(f'| Total Time | {results[\"total_time\"]:.2f}s |', file=sys.stderr)
+    print(f'', file=sys.stderr)
+
+    # Individual test results
+    print(f'### Individual Test Results', file=sys.stderr)
+    print(f'', file=sys.stderr)
+    for test in results['test_results']:
+        status = '✅' if test['success'] else '❌'
+        timing = f' ({test.get(\"response_time\", 0):.2f}s)' if test.get('response_time') else ''
+        code = f' [{test.get(\"status_code\")}]' if test.get('status_code') else ''
+        print(f'- {status} **{test[\"test_name\"]}**{timing}{code}', file=sys.stderr)
+        print(f'  {test[\"message\"]}', file=sys.stderr)
+
+except Exception as e:
+    print(f'Error parsing results: {e}', file=sys.stderr)
+" 2>> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Smoke test results file not found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Report success to Slack/Discord (optional)
+      if: success() && github.event_name == 'workflow_run'
+      env:
+        WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ ! -z "$WEBHOOK_URL" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"✅ Production smoke tests passed for ${{ steps.url.outputs.target_url }}"}' \
+            "$WEBHOOK_URL" || true
+        fi
+
+    - name: Report failure to Slack/Discord (optional)
+      if: failure()
+      env:
+        WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ ! -z "$WEBHOOK_URL" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"❌ Production smoke tests failed for ${{ steps.url.outputs.target_url }}. Check GitHub Actions for details."}' \
+            "$WEBHOOK_URL" || true
+        fi
+
+  post-deployment-health:
+    name: Extended Health Monitor
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+
+    - name: Extended monitoring (5 minutes)
+      run: |
+        echo "Running extended health monitoring for 5 minutes..."
+
+        for i in {1..5}; do
+          echo "Health check round $i/5..."
+
+          python tests/smoke_tests.py \
+            --url "https://maurinventuresinternal.com" \
+            --timeout 15 \
+            --fail-fast || {
+              echo "❌ Health check failed in round $i"
+              exit 1
+            }
+
+          if [ $i -lt 5 ]; then
+            echo "Waiting 1 minute before next check..."
+            sleep 60
+          fi
+        done
+
+        echo "✅ Extended health monitoring completed successfully"
+
+    - name: Report extended monitoring results
+      if: always()
+      run: |
+        echo "## 🏥 Extended Health Monitoring" >> $GITHUB_STEP_SUMMARY
+        if [ $? -eq 0 ]; then
+          echo "✅ Application remained healthy during 5-minute monitoring period" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Application showed instability during monitoring period" >> $GITHUB_STEP_SUMMARY
+        fi

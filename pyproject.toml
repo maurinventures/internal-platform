@@ -1,0 +1,98 @@
+# Python Project Configuration (Prompt 25)
+
+[tool.black]
+line-length = 127
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    # Directories to exclude
+    \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.pytest_cache
+    | \.venv
+    | venv
+    | env
+    | _build
+    | buck-out
+    | build
+    | dist
+    | node_modules
+    | _archive
+    | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 127
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = [
+    "**/.venv/*",
+    "**/venv/*",
+    "**/env/*",
+    "**/node_modules/*",
+    "**/_archive/*",
+    "**/migrations/*"
+]
+
+# Import sections order
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "THIRDPARTY",
+    "FIRSTPARTY",
+    "LOCALFOLDER"
+]
+
+# Known third party packages
+known_third_party = [
+    "flask",
+    "sqlalchemy",
+    "boto3",
+    "anthropic",
+    "openai",
+    "pytest",
+    "click",
+    "yaml",
+    "tqdm",
+    "pyotp",
+    "qrcode"
+]
+
+# Known first party packages (our local modules)
+known_first_party = [
+    "web",
+    "scripts",
+    "config"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--durations=10",
+    "--strict-markers",
+    "--strict-config"
+]
+markers = [
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "auth: marks tests as authentication related",
+    "api: marks tests as API related",
+    "slow: marks tests as slow running"
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]

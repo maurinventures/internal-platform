@@ -395,6 +395,9 @@ class AILog(Base):
     latency_ms = Column(Float, nullable=True)  # Time taken in milliseconds
     input_tokens = Column(Integer, nullable=True)  # Token count (if available)
     output_tokens = Column(Integer, nullable=True)
+    total_cost = Column(Float, nullable=True)  # Total cost in USD for this call
+    input_cost = Column(Float, nullable=True)  # Cost for input tokens
+    output_cost = Column(Float, nullable=True)  # Cost for output tokens
 
     # RAG Integration Metrics (Prompt 18)
     search_method = Column(String(20), nullable=True)  # 'rag', 'keyword', 'hybrid', 'rag_failed'
@@ -412,6 +415,81 @@ class AILog(Base):
     # Relationships
     user = relationship("User")
     conversation = relationship("Conversation")
+
+
+class AIPromptCache(Base):
+    """Cache for identical prompts to avoid duplicate API calls."""
+
+    __tablename__ = "ai_prompt_cache"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_hash = Column(String(64), nullable=False, unique=True)  # SHA256 of prompt+model
+    model = Column(String(100), nullable=False)
+    prompt = Column(Text, nullable=False)
+    response = Column(Text, nullable=False)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_cost = Column(Float, nullable=True)
+    hit_count = Column(Integer, default=1)  # How many times this was reused
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_used_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class GenerationJob(Base):
+    """Pipeline jobs for long-form content generation (Prompt 20)."""
+
+    __tablename__ = "generation_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Job metadata
+    job_name = Column(String(255), nullable=False)  # User-friendly name
+    job_type = Column(String(50), nullable=False)  # 'article', 'script', 'report', etc.
+    status = Column(String(50), nullable=False, default='brief_analysis')  # Pipeline stage
+
+    # Content specifications
+    brief = Column(Text, nullable=False)  # Original user brief/request
+    target_word_count = Column(Integer)  # Approximate target length
+    target_audience = Column(String(255))  # Who is this for
+    content_format = Column(String(100))  # 'blog_post', 'linkedin_article', 'script', etc.
+
+    # Pipeline artifacts (JSON objects)
+    outline = Column(JSONB, nullable=True)  # Section breakdown with word targets
+    style_guide = Column(JSONB, nullable=True)  # Tone, voice, formatting rules
+    fact_sheet = Column(JSONB, nullable=True)  # Established facts to maintain consistency
+    character_bible = Column(JSONB, nullable=True)  # Character info (for scripts)
+
+    # Generation progress
+    sections_total = Column(Integer, default=0)  # Number of sections planned
+    sections_completed = Column(Integer, default=0)  # Number completed
+    current_section = Column(Integer, default=0)  # Current section being worked on
+    sections_content = Column(JSONB, default={})  # Dict of section_num -> content
+
+    # Final output
+    assembled_content = Column(Text, nullable=True)  # Final assembled document
+    word_count_actual = Column(Integer, nullable=True)  # Actual final word count
+
+    # Quality checks
+    continuity_issues = Column(JSONB, default=[])  # List of continuity problems found
+    fact_conflicts = Column(JSONB, default=[])  # Contradictions with fact sheet
+
+    # Cost tracking
+    total_tokens_used = Column(Integer, default=0)  # Sum across all pipeline stages
+    total_cost = Column(Float, default=0.0)  # Total $ cost for this job
+
+    # User and timestamps
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Error handling
+    error_message = Column(Text, nullable=True)  # If job failed
+    retry_count = Column(Integer, default=0)  # Number of retry attempts
+
+    # Relationships
+    creator = relationship("User")
 
 
 class Persona(Base):

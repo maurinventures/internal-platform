@@ -1,0 +1,334 @@
+# Deployment Configuration (Prompt 28)
+
+# Environment Configurations
+environments:
+  production:
+    url: "https://maurinventuresinternal.com"
+    deployment_type: "blue_green"  # blue_green, direct, rolling
+    health_check_timeout: 300  # seconds
+    smoke_tests_enabled: true
+    rollback_enabled: true
+    backup_enabled: true
+    auto_deploy: false  # requires manual approval
+    notification_channels: ["slack", "email"]
+
+    # Blue-Green specific settings
+    blue_green:
+      load_balancer: "internal-platform-lb"
+      green_environment_timeout: 600  # seconds
+      traffic_switch_timeout: 120     # seconds
+      cleanup_delay: 300              # seconds before cleanup
+
+    # Health check configuration
+    health_checks:
+      pre_deployment:
+        - endpoint: "/api/health"
+          expected_status: 200
+          timeout: 30
+        - endpoint: "/"
+          expected_status: 200
+          timeout: 30
+
+      post_deployment:
+        - endpoint: "/api/health"
+          expected_status: 200
+          timeout: 30
+          max_attempts: 20
+          interval: 15
+        - endpoint: "/api/auth/me"
+          expected_status: 401
+          timeout: 30
+        - endpoint: "/"
+          expected_status: 200
+          timeout: 30
+
+  staging:
+    url: "https://staging.maurinventuresinternal.com"
+    deployment_type: "direct"
+    health_check_timeout: 180
+    smoke_tests_enabled: true
+    rollback_enabled: true
+    backup_enabled: false
+    auto_deploy: true
+    notification_channels: ["slack"]
+
+    # Health check configuration
+    health_checks:
+      post_deployment:
+        - endpoint: "/api/health"
+          expected_status: 200
+          timeout: 30
+          max_attempts: 10
+          interval: 10
+
+  development:
+    url: "http://localhost:5001"
+    deployment_type: "direct"
+    health_check_timeout: 60
+    smoke_tests_enabled: false
+    rollback_enabled: false
+    backup_enabled: false
+    auto_deploy: true
+    notification_channels: []
+
+# Deployment Scripts Configuration
+deployment_scripts:
+  frontend:
+    build_commands:
+      - "cd frontend"
+      - "npm ci --legacy-peer-deps"
+      - "npm run build"
+
+    deploy_commands:
+      production:
+        - "sudo cp -r frontend/build/* /var/www/html/"
+        - "sudo chown -R www-data:www-data /var/www/html/"
+        - "sudo systemctl reload nginx"
+      staging:
+        - "sudo cp -r frontend/build/* /var/www/staging/"
+        - "sudo systemctl reload nginx"
+
+  backend:
+    build_commands:
+      - "pip install -r requirements.txt"
+
+    deploy_commands:
+      production:
+        - "sudo systemctl stop mv-internal"
+        - "sudo systemctl start mv-internal"
+        - "sleep 10"  # Allow service to start
+      staging:
+        - "sudo systemctl restart mv-internal-staging"
+
+# Rollback Configuration
+rollback:
+  automatic_triggers:
+    - health_check_failure: true
+    - smoke_test_failure: false  # Manual decision for smoke test failures
+    - error_rate_threshold: 5.0  # % error rate to trigger rollback
+    - response_time_threshold: 5000  # ms response time to trigger rollback
+
+  manual_approval_required:
+    - production: true
+    - staging: false
+    - development: false
+
+  retention:
+    backup_count: 5  # Number of deployment backups to keep
+    history_days: 30  # Days to keep deployment history
+
+# Notification Configuration
+notifications:
+  slack:
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channels:
+      production: "#deployments"
+      staging: "#staging-deploys"
+      alerts: "#alerts"
+
+    templates:
+      deployment_start: |
+        🚀 **Deployment Started**
+        Environment: {{environment}}
+        Branch: {{branch}}
+        Commit: {{commit_hash}}
+        Type: {{deployment_type}}
+
+      deployment_success: |
+        ✅ **Deployment Successful**
+        Environment: {{environment}}
+        Commit: {{commit_hash}}
+        Duration: {{duration}}s
+        Health: {{health_status}}
+
+      deployment_failure: |
+        ❌ **Deployment Failed**
+        Environment: {{environment}}
+        Commit: {{commit_hash}}
+        Error: {{error_message}}
+        Rollback: {{rollback_performed}}
+
+      rollback_initiated: |
+        🔄 **Rollback Initiated**
+        Environment: {{environment}}
+        From: {{current_commit}}
+        To: {{rollback_commit}}
+        Reason: {{rollback_reason}}
+
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    from_address: "deployments@maurinventures.com"
+
+    recipients:
+      production:
+        - "admin@maurinventures.com"
+        - "dev-team@maurinventures.com"
+      staging:
+        - "dev-team@maurinventures.com"
+
+# Security Configuration
+security:
+  deployment_approvals:
+    production:
+      required: true
+      approvers: ["admin@maurinventures.com"]
+      timeout_hours: 24
+
+  access_control:
+    deploy_permissions: ["admin", "devops"]
+    rollback_permissions: ["admin", "devops", "lead-dev"]
+
+  audit_logging:
+    enabled: true
+    log_level: "INFO"
+    retention_days: 90
+
+# Monitoring Configuration
+monitoring:
+  metrics_collection:
+    enabled: true
+    retention_days: 30
+
+  deployment_metrics:
+    - "deployment_duration"
+    - "health_check_response_time"
+    - "smoke_test_duration"
+    - "rollback_frequency"
+    - "success_rate"
+
+  alerts:
+    deployment_failure:
+      enabled: true
+      channels: ["slack", "email"]
+
+    rollback_performed:
+      enabled: true
+      channels: ["slack", "email"]
+
+    deployment_duration_threshold:
+      enabled: true
+      threshold_seconds: 600  # 10 minutes
+      channels: ["slack"]
+
+# Backup Configuration
+backup:
+  enabled: true
+
+  strategies:
+    database:
+      enabled: false  # RDS automated backups used instead
+      retention_days: 7
+
+    application:
+      enabled: true
+      backup_paths:
+        - "/var/www/html"
+        - "/etc/nginx/sites-available"
+        - "/etc/systemd/system/mv-internal.service"
+      retention_count: 5
+
+    configuration:
+      enabled: true
+      backup_paths:
+        - "/home/ec2-user/video-management"
+      retention_count: 10
+
+# Performance Optimization
+performance:
+  parallel_deployments: false  # Don't deploy multiple environments simultaneously
+
+  build_optimization:
+    frontend:
+      enable_cache: true
+      cache_ttl: 3600  # seconds
+
+  deployment_optimization:
+    enable_compression: true
+    minimize_downtime: true
+    graceful_shutdown_timeout: 30  # seconds
+
+# Testing Configuration
+testing:
+  pre_deployment:
+    unit_tests:
+      enabled: true
+      timeout: 300
+
+    integration_tests:
+      enabled: true
+      timeout: 600
+
+    linting:
+      enabled: true
+      fail_on_warnings: false
+
+  post_deployment:
+    smoke_tests:
+      enabled: true
+      timeout: 180
+      fail_deployment: false  # Warning only
+
+    health_checks:
+      enabled: true
+      timeout: 300
+      fail_deployment: true
+
+    load_tests:
+      enabled: false  # Manual trigger only
+      timeout: 600
+
+# Feature Flags
+feature_flags:
+  blue_green_deployments: true
+  automatic_rollback: true
+  slack_notifications: true
+  email_notifications: true
+  deployment_approvals: true
+  backup_creation: true
+  smoke_tests: true
+  load_testing: false
+
+# Deployment Scheduling
+scheduling:
+  maintenance_windows:
+    production:
+      - day: "sunday"
+        start_time: "02:00"
+        end_time: "06:00"
+        timezone: "UTC"
+      - day: "wednesday"
+        start_time: "03:00"
+        end_time: "05:00"
+        timezone: "UTC"
+
+  deployment_restrictions:
+    production:
+      block_fridays: true  # No Friday deployments
+      block_holidays: true
+      business_hours_only: false
+
+    staging:
+      block_fridays: false
+      block_holidays: false
+      business_hours_only: false
+
+# Integration Configuration
+integrations:
+  github:
+    webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
+    auto_deploy_branches: ["main"]
+    auto_deploy_environments: ["staging"]
+
+  aws:
+    region: "us-east-1"
+    s3_backup_bucket: "maurin-ventures-deployments"
+
+  monitoring:
+    datadog:
+      enabled: false
+      api_key: "${DATADOG_API_KEY}"
+
+    newrelic:
+      enabled: false
+      api_key: "${NEWRELIC_API_KEY}"

@@ -20,7 +20,7 @@ import anthropic
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import boto3
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, CompiledVideo, ScriptFeedback, Conversation, ChatMessage, User, AILog, Persona, Document, SocialPost, AudioRecording, AudioSegment, Project, ExternalContent, ExternalContentSegment
 from services.external_content_service import ExternalContentService
 from services.auth_service import AuthService
@@ -3977,12 +3977,48 @@ def admin_invite():
 
 
 # ==============================================================================
+# API HEALTH AND STATUS ENDPOINTS (Prompt 26)
+# ==============================================================================
+
+@app.route('/api/health', methods=['GET'])
+def api_health():
+    """Health check endpoint for monitoring and smoke tests."""
+    try:
+        # Test database connectivity
+        with DatabaseSession() as db_session:
+            # Simple query to verify database is accessible
+            result = db_session.execute(text("SELECT 1")).fetchone()
+            db_healthy = result is not None
+    except Exception as e:
+        db_healthy = False
+        app.logger.error(f"Health check database error: {str(e)}")
+
+    # Check application status
+    health_data = {
+        'status': 'healthy' if db_healthy else 'unhealthy',
+        'timestamp': time.time(),
+        'version': '1.0.0',  # Could be read from environment or config
+        'checks': {
+            'database': 'healthy' if db_healthy else 'unhealthy',
+            'application': 'healthy'  # App is running if we got here
+        }
+    }
+
+    status_code = 200 if db_healthy else 503
+    return jsonify(health_data), status_code
+
+
+# ==============================================================================
 # NEW API AUTH ENDPOINTS FOR REACT FRONTEND
 # ==============================================================================
 
 @app.route('/api/auth/me', methods=['GET'])
 def api_auth_me():
     """Get current authenticated user info."""
+    # Check if user has been logged out
+    if session.get('logged_out'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -4333,8 +4369,245 @@ def api_auth_resend_verification():
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
     """Logout user."""
+    # Set logout flag before clearing session
+    session['logged_out'] = True
+
+    # Explicitly remove session keys
+    session.pop('user_id', None)
+    session.pop('user_name', None)
+    session.pop('user_email', None)
+    session.pop('pending_2fa_user_id', None)
+    session.pop('pending_2fa_email', None)
+    session.pop('pending_2fa_secret', None)
+
+    # Clear any remaining session data except logout flag
+    user_logged_out = session.get('logged_out')
     session.clear()
+    if user_logged_out:
+        session['logged_out'] = True
     return jsonify({'success': True})
+
+
+# Prompt 19: Usage Stats and Tracking API Endpoint
+@app.route('/api/usage/stats', methods=['GET'])
+def api_usage_stats():
+    """Get usage statistics and limits for the current user."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+
+    try:
+        # Import usage limits service
+        from services.usage_limits_service import UsageLimitsService
+
+        # Get days parameter (default 30 days)
+        days = request.args.get('days', 30, type=int)
+        if days < 1 or days > 365:
+            days = 30
+
+        # Get comprehensive usage stats
+        stats = UsageLimitsService.get_user_usage_stats(user_id, days)
+
+        # Get current daily usage check
+        daily_check = UsageLimitsService.check_daily_user_limit(user_id)
+
+        # Get context limits info
+        context_limits = {
+            'max_context_tokens': UsageLimitsService.MAX_CONTEXT_TOKENS,
+            'warning_threshold': UsageLimitsService.WARNING_THRESHOLD
+        }
+
+        # Build response
+        response_data = {
+            'user_id': user_id,
+            'current_usage': {
+                'today_tokens': daily_check['usage'],
+                'today_percentage': daily_check['percentage'],
+                'daily_limit': daily_check['limit'],
+                'warning_active': daily_check['warning'],
+                'limit_reached': not daily_check['allowed']
+            },
+            'period_stats': {
+                'period_days': stats['period_days'],
+                'total_calls': stats['total_calls'],
+                'total_input_tokens': stats['total_input_tokens'],
+                'total_output_tokens': stats['total_output_tokens'],
+                'total_tokens': stats['total_tokens'],
+                'total_cost': round(stats['total_cost'], 4),
+                'models_used': stats['models_used'],
+                'avg_cost_per_call': round(stats['total_cost'] / max(stats['total_calls'], 1), 4)
+            },
+            'limits': {
+                'max_daily_tokens': UsageLimitsService.MAX_DAILY_TOKENS_PER_USER,
+                'max_context_tokens': UsageLimitsService.MAX_CONTEXT_TOKENS,
+                'warning_threshold_percent': UsageLimitsService.WARNING_THRESHOLD * 100
+            },
+            'model_pricing': UsageLimitsService.MODEL_COSTS
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"[ERROR] Usage stats API error: {e}")
+        return jsonify({'error': 'Failed to get usage statistics', 'details': str(e)}), 500
+
+
+@app.route('/api/usage/clean-cache', methods=['POST'])
+def api_clean_usage_cache():
+    """Clean old cached prompts (admin only)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+
+    # Basic admin check (you might want to make this more sophisticated)
+    user_email = session.get('user_email', '')
+    if not user_email.endswith('@maurinventures.com'):
+        return jsonify({'error': 'Admin access required'}), 403
+
+    try:
+        from services.usage_limits_service import UsageLimitsService
+
+        # Get days parameter (default 30 days)
+        days = request.json.get('days', 30) if request.json else 30
+        if days < 1 or days > 365:
+            days = 30
+
+        deleted_count = UsageLimitsService.clean_old_cache(days)
+
+        return jsonify({
+            'success': True,
+            'deleted_entries': deleted_count,
+            'cutoff_days': days
+        })
+
+    except Exception as e:
+        print(f"[ERROR] Cache cleanup API error: {e}")
+        return jsonify({'error': 'Failed to clean cache', 'details': str(e)}), 500
+
+
+# Prompt 20: Generation Pipeline API Endpoints
+@app.route('/api/generation/jobs', methods=['POST'])
+def api_create_generation_job():
+    """Create a new long-form content generation job."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+
+    try:
+        from scripts.generation_service import GenerationService
+
+        data = request.get_json()
+        if not data or 'brief' not in data:
+            return jsonify({'error': 'Brief is required'}), 400
+
+        brief = data.get('brief', '').strip()
+        if not brief:
+            return jsonify({'error': 'Brief cannot be empty'}), 400
+
+        job_id = GenerationService.create_generation_job(
+            brief=brief,
+            job_name=data.get('job_name'),
+            job_type=data.get('job_type', 'article'),
+            content_format=data.get('content_format', 'blog_post'),
+            target_word_count=data.get('target_word_count'),
+            target_audience=data.get('target_audience'),
+            user_id=user_id
+        )
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'message': 'Generation job created successfully'
+        })
+
+    except Exception as e:
+        print(f"[ERROR] Create generation job error: {e}")
+        return jsonify({'error': 'Failed to create generation job', 'details': str(e)}), 500
+
+
+@app.route('/api/generation/jobs/<job_id>', methods=['GET'])
+def api_get_generation_job(job_id):
+    """Get status and details of a generation job."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        from scripts.generation_service import GenerationService
+
+        job_status = GenerationService.get_job_status(job_id)
+        if not job_status:
+            return jsonify({'error': 'Job not found'}), 404
+
+        return jsonify(job_status)
+
+    except Exception as e:
+        print(f"[ERROR] Get generation job error: {e}")
+        return jsonify({'error': 'Failed to get job status', 'details': str(e)}), 500
+
+
+@app.route('/api/generation/jobs/<job_id>/continue', methods=['POST'])
+def api_continue_generation_job(job_id):
+    """Continue pipeline execution for a generation job."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        from scripts.generation_service import GenerationService
+
+        data = request.get_json() or {}
+        model = data.get('model', 'claude-sonnet')
+
+        result = GenerationService.continue_pipeline(job_id, model)
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"[ERROR] Continue generation job error: {e}")
+        return jsonify({'error': 'Failed to continue job', 'details': str(e)}), 500
+
+
+@app.route('/api/generation/jobs/<job_id>/content', methods=['GET'])
+def api_get_generation_content(job_id):
+    """Get the final assembled content for a completed job."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        from scripts.generation_service import GenerationService
+
+        content = GenerationService.get_completed_content(job_id)
+        if not content:
+            return jsonify({'error': 'Job not found or not completed'}), 404
+
+        return jsonify(content)
+
+    except Exception as e:
+        print(f"[ERROR] Get generation content error: {e}")
+        return jsonify({'error': 'Failed to get content', 'details': str(e)}), 500
+
+
+@app.route('/api/generation/jobs', methods=['GET'])
+def api_list_generation_jobs():
+    """List all generation jobs for the current user."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+
+    try:
+        from scripts.generation_service import GenerationService
+
+        jobs = GenerationService.list_user_jobs(user_id)
+        return jsonify({
+            'jobs': jobs,
+            'total_jobs': len(jobs)
+        })
+
+    except Exception as e:
+        print(f"[ERROR] List generation jobs error: {e}")
+        return jsonify({'error': 'Failed to list jobs', 'details': str(e)}), 500
 
 
 @app.route('/api/models', methods=['GET'])

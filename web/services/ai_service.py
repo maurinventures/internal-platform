@@ -23,11 +23,13 @@ try:
     from scripts.config_loader import get_config
     from .video_service import VideoService
     from .rag_service import RAGService  # Prompt 18: RAG Integration
+    from .usage_limits_service import UsageLimitsService  # Prompt 19: Usage Limits
 except ImportError:
     from ..scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, AILog, Persona, SocialPost, ScriptFeedback, Conversation
     from ..scripts.config_loader import get_config
     from .video_service import VideoService
     from .rag_service import RAGService  # Prompt 18: RAG Integration
+    from .usage_limits_service import UsageLimitsService  # Prompt 19: Usage Limits
 
 
 class AIService:
@@ -77,6 +79,9 @@ class AIService:
         latency_ms: float = None,
         input_tokens: int = None,
         output_tokens: int = None,
+        total_cost: float = None,
+        input_cost: float = None,
+        output_cost: float = None,
         user_id: str = None,
         conversation_id: str = None,
         # RAG Integration Metrics (Prompt 18)
@@ -105,6 +110,9 @@ class AIService:
                     latency_ms=latency_ms,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    total_cost=total_cost,
+                    input_cost=input_cost,
+                    output_cost=output_cost,
                     user_id=UUID(user_id) if user_id else None,
                     conversation_id=UUID(conversation_id) if conversation_id else None,
                     # RAG Integration Metrics (Prompt 18)
@@ -417,6 +425,80 @@ TRANSCRIPT DATA:
         input_tokens = None
         output_tokens = None
 
+        # Prompt 19: Usage Limits and Token Tracking - Check prompt cache first
+        prompt_hash = f"{model}:{user_message}"
+        cached_response = UsageLimitsService.check_prompt_cache(user_message, model)
+        if cached_response:
+            print(f"[CACHE HIT] Found cached response for prompt hash")
+            # Return cached response immediately
+            return {
+                "message": cached_response['response'],
+                "clips": [],  # Cached responses don't include clips to avoid complex validation
+                "cached": True,
+                "total_cost": cached_response['total_cost'],
+                "cache_hit_count": cached_response['hit_count']
+            }
+
+        # Prompt 19: Check usage limits before making API call
+        # Estimate tokens for context limit check (rough estimate: 4 chars = 1 token)
+        estimated_input_tokens = len(system_prompt + user_message + str(conversation_history)) // 4
+
+        # Check context limit
+        context_check = UsageLimitsService.check_context_limit(estimated_input_tokens)
+        if not context_check['allowed']:
+            error_msg = context_check['reason']
+            print(f"[USAGE LIMIT] Context limit exceeded: {error_msg}")
+
+            # Log failed call due to limits
+            AIService.log_ai_call(
+                request_type="chat",
+                model=model,
+                prompt=user_message,
+                context_summary="Context limit exceeded",
+                success=False,
+                error_message=error_msg,
+                input_tokens=estimated_input_tokens,
+                user_id=user_id,
+                conversation_id=conversation_id
+            )
+
+            return {
+                "error": error_msg,
+                "context_limit": context_check['limit'],
+                "requested_tokens": context_check['requested']
+            }
+
+        # Check daily user limit if user_id is provided
+        if user_id:
+            daily_check = UsageLimitsService.check_daily_user_limit(user_id, estimated_input_tokens)
+            if not daily_check['allowed']:
+                error_msg = daily_check['reason']
+                print(f"[USAGE LIMIT] Daily limit exceeded: {error_msg}")
+
+                # Log failed call due to limits
+                AIService.log_ai_call(
+                    request_type="chat",
+                    model=model,
+                    prompt=user_message,
+                    context_summary="Daily limit exceeded",
+                    success=False,
+                    error_message=error_msg,
+                    input_tokens=estimated_input_tokens,
+                    user_id=user_id,
+                    conversation_id=conversation_id
+                )
+
+                return {
+                    "error": error_msg,
+                    "daily_usage": daily_check['usage'],
+                    "daily_limit": daily_check['limit'],
+                    "percentage_used": daily_check['percentage']
+                }
+
+            # Check for usage warnings at 80% threshold
+            if daily_check['warning']:
+                print(f"[USAGE WARNING] User {user_id} at {daily_check['percentage']:.1%} of daily limit")
+
         try:
             # Determine which provider to use
             actual_model = AIService.MODEL_MAP.get(model, model)
@@ -519,7 +601,25 @@ TRANSCRIPT DATA:
             else:
                 reconstructed = assistant_message
 
-            # Log successful AI call to database
+            # Prompt 19: Calculate costs and cache response
+            input_cost, output_cost, total_cost = UsageLimitsService.calculate_cost(
+                model, input_tokens or 0, output_tokens or 0
+            )
+
+            # Cache the prompt response for future reuse (only for successful calls)
+            if assistant_message and total_cost is not None:
+                UsageLimitsService.cache_prompt_response(
+                    prompt=user_message,
+                    model=model,
+                    response=assistant_message,
+                    input_tokens=input_tokens or 0,
+                    output_tokens=output_tokens or 0,
+                    total_cost=total_cost
+                )
+
+            print(f"[USAGE TRACKING] Cost: ${total_cost:.4f} | Input: {input_tokens} tokens | Output: {output_tokens} tokens")
+
+            # Log successful AI call to database with cost information
             latency_ms = (time.time() - start_time) * 1000
             AIService.log_ai_call(
                 request_type="chat",
@@ -533,6 +633,9 @@ TRANSCRIPT DATA:
                 latency_ms=latency_ms,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                total_cost=total_cost,
+                input_cost=input_cost,
+                output_cost=output_cost,
                 user_id=user_id,
                 conversation_id=conversation_id,
                 # RAG Integration Metrics (Prompt 18)

@@ -1,0 +1,234 @@
+# AWS Optimization Configuration (Prompt 27)
+
+# S3 Optimization Settings
+s3:
+  # Buckets to monitor and optimize
+  buckets:
+    - name: "maurin-ventures-internal-uploads"
+      optimization_level: "aggressive"  # conservative, moderate, aggressive
+      lifecycle_enabled: true
+      monitoring_enabled: true
+
+    - name: "maurin-ventures-internal-backups"
+      optimization_level: "moderate"
+      lifecycle_enabled: true
+      monitoring_enabled: true
+
+  # Lifecycle policy settings
+  lifecycle_policies:
+    conservative:
+      transition_to_ia_days: 60
+      transition_to_glacier_days: 365
+      transition_to_deep_archive_days: 1095  # 3 years
+      delete_incomplete_multipart_days: 7
+
+    moderate:
+      transition_to_ia_days: 30
+      transition_to_glacier_days: 365
+      transition_to_deep_archive_days: 2555  # 7 years
+      delete_incomplete_multipart_days: 7
+
+    aggressive:
+      transition_to_ia_days: 30
+      transition_to_glacier_days: 90
+      transition_to_deep_archive_days: 365
+      delete_incomplete_multipart_days: 3
+
+  # Cost thresholds for recommendations
+  cost_thresholds:
+    warning_monthly_cost: 50.0  # USD
+    critical_monthly_cost: 100.0  # USD
+    size_threshold_gb: 10.0  # GB
+
+# RDS Optimization Settings
+rds:
+  # RDS instances to monitor
+  instances:
+    - identifier: "internal-platform-prod"
+      optimization_enabled: true
+      monitoring_enabled: true
+      backup_retention_days: 7
+
+    - identifier: "internal-platform-staging"
+      optimization_enabled: true
+      monitoring_enabled: false
+      backup_retention_days: 3
+
+  # Performance thresholds
+  performance_thresholds:
+    cpu_utilization:
+      high_threshold: 80.0  # %
+      low_threshold: 20.0   # %
+      warning_duration_minutes: 60
+
+    memory_utilization:
+      high_threshold: 85.0  # %
+      warning_duration_minutes: 30
+
+    connection_count:
+      warning_threshold: 80   # connections
+      critical_threshold: 95  # connections
+
+    storage_usage:
+      warning_threshold: 80.0  # %
+      critical_threshold: 90.0 # %
+
+  # Instance type recommendations
+  instance_types:
+    micro_max_cpu: 60.0      # % - upgrade from micro if CPU > this
+    small_to_medium_cpu: 70.0 # % - upgrade from small to medium
+    cost_optimization_cpu: 30.0  # % - downgrade if CPU < this for 7 days
+
+# Cost Optimization Settings
+cost_optimization:
+  # Budget settings
+  budgets:
+    monthly_budget: 500.0  # USD
+    warning_threshold: 80.0  # % of budget
+    critical_threshold: 95.0 # % of budget
+
+  # Reserved Instance recommendations
+  reserved_instances:
+    utilization_threshold: 70.0  # % - recommend RI if utilization > this
+    recommendation_lookback_days: 30
+
+  # Unused resource detection
+  unused_resources:
+    ebs_volume_unused_days: 7
+    snapshot_retention_days: 30
+    unused_elastic_ip_days: 1
+
+# API Rate Limiting Settings
+rate_limiting:
+  # AI service rate limits
+  anthropic:
+    requests_per_minute: 100
+    requests_per_hour: 3000
+    requests_per_day: 50000
+    cost_per_1k_tokens_input: 0.015
+    cost_per_1k_tokens_output: 0.075
+    burst_allowance: 10  # Extra requests allowed in burst
+
+  openai:
+    requests_per_minute: 60
+    requests_per_hour: 2000
+    requests_per_day: 30000
+    cost_per_1k_tokens_input: 0.020
+    cost_per_1k_tokens_output: 0.060
+    burst_allowance: 5
+
+  # AWS service rate limits
+  aws_s3:
+    requests_per_second: 100
+    burst_allowance: 50
+
+  aws_rds:
+    connections_per_instance: 100
+    query_timeout_seconds: 30
+
+# Monitoring and Alerting
+monitoring:
+  # CloudWatch settings
+  cloudwatch:
+    metrics_retention_days: 30
+    detailed_monitoring: false  # Enable for production
+    custom_metrics: true
+
+  # Alert settings
+  alerts:
+    email_recipients:
+      - "admin@maurinventures.com"
+
+    slack_webhook_url: "${SLACK_WEBHOOK_URL}"
+
+    cost_alerts:
+      - threshold: 100.0  # USD
+        frequency: "daily"
+      - threshold: 400.0  # USD
+        frequency: "immediate"
+
+    performance_alerts:
+      - metric: "cpu_utilization"
+        threshold: 85.0
+        frequency: "immediate"
+      - metric: "storage_usage"
+        threshold: 90.0
+        frequency: "immediate"
+
+# Optimization Scheduling
+scheduling:
+  # When to run optimizations
+  optimization_runs:
+    daily_analysis: "06:00"  # UTC time
+    weekly_deep_scan: "02:00"  # Sunday 2 AM UTC
+    monthly_report: "01"  # 1st of month
+
+  # Maintenance windows
+  maintenance_windows:
+    - day: "sunday"
+      start_time: "02:00"
+      duration_hours: 4
+      operations: ["lifecycle_policy_updates", "instance_maintenance"]
+
+    - day: "wednesday"
+      start_time: "03:00"
+      duration_hours: 2
+      operations: ["cost_analysis", "cleanup"]
+
+# Environment-specific settings
+environments:
+  production:
+    auto_apply_optimizations: false  # Manual approval required
+    aggressive_optimizations: false
+    backup_before_changes: true
+    notification_level: "all"
+
+  staging:
+    auto_apply_optimizations: true
+    aggressive_optimizations: true
+    backup_before_changes: false
+    notification_level: "errors_only"
+
+  development:
+    auto_apply_optimizations: true
+    aggressive_optimizations: true
+    backup_before_changes: false
+    notification_level: "none"
+
+# Reporting Settings
+reporting:
+  # Report generation
+  monthly_report:
+    enabled: true
+    email_recipients:
+      - "admin@maurinventures.com"
+      - "finance@maurinventures.com"
+
+    include_sections:
+      - "cost_summary"
+      - "optimization_recommendations"
+      - "usage_trends"
+      - "projected_savings"
+
+  # Data retention
+  data_retention:
+    metrics_days: 90
+    reports_days: 365
+    logs_days: 30
+
+# Security Settings
+security:
+  # IAM permissions
+  required_permissions:
+    - "s3:GetBucketVersioning"
+    - "s3:GetLifecycleConfiguration"
+    - "s3:PutLifecycleConfiguration"
+    - "rds:DescribeDBInstances"
+    - "cloudwatch:GetMetricStatistics"
+    - "ce:GetCostAndUsage"
+
+  # Encryption
+  encryption:
+    s3_encryption_required: true
+    rds_encryption_required: true
+    cloudwatch_logs_encrypted: true

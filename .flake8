@@ -1,0 +1,53 @@
+[flake8]
+# Flake8 Configuration for CI Pipeline (Prompt 25)
+
+# Maximum line length
+max-line-length = 127
+
+# Maximum cyclomatic complexity
+max-complexity = 10
+
+# Error codes to ignore
+ignore =
+    # E203: whitespace before ':' (conflicts with black)
+    E203,
+    # W503: line break before binary operator (conflicts with black)
+    W503,
+    # E501: line too long (handled by black)
+    E501
+
+# Directories to exclude from linting
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .env,
+    build,
+    dist,
+    .eggs,
+    *.egg-info,
+    .pytest_cache,
+    .coverage,
+    htmlcov,
+    .mypy_cache,
+    node_modules,
+    migrations,
+    _archive
+
+# Files to exclude
+per-file-ignores =
+    # Ignore unused imports in __init__.py files
+    __init__.py:F401
+    # Ignore specific issues in test files
+    tests/*:F401,F811
+
+# Count errors and warnings
+count = True
+
+# Show source code for each error
+show-source = True
+
+# Print statistics
+statistics = True

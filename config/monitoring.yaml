@@ -1,0 +1,386 @@
+# Monitoring Configuration (Prompt 29)
+
+# Collection Settings
+collection:
+  interval_seconds: 60  # How often to collect metrics
+  retention_days: 30    # How long to keep historical data
+  batch_size: 100       # Metrics batch size for storage
+
+  # Metrics to collect
+  enabled_metrics:
+    system:
+      - cpu_usage
+      - memory_usage
+      - disk_usage
+      - network_io
+      - load_average
+      - process_count
+
+    application:
+      - health_status
+      - response_times
+      - error_rates
+      - database_connections
+      - active_sessions
+
+    business:
+      - ai_api_calls
+      - ai_costs
+      - user_activity
+      - deployment_frequency
+
+# Storage Configuration
+storage:
+  type: "sqlite"  # sqlite, postgresql, mysql
+  connection_string: "metrics.db"
+
+  # Cleanup settings
+  cleanup_enabled: true
+  cleanup_interval_hours: 24
+  max_records_per_metric: 10000
+
+# Alert Rules Configuration
+alerts:
+  # System alerts
+  system:
+    high_cpu:
+      metric: "system.cpu.usage_percent"
+      threshold: 80.0
+      operator: "gt"
+      duration_seconds: 300  # 5 minutes
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+    critical_cpu:
+      metric: "system.cpu.usage_percent"
+      threshold: 95.0
+      operator: "gt"
+      duration_seconds: 60   # 1 minute
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    high_memory:
+      metric: "system.memory.usage_percent"
+      threshold: 85.0
+      operator: "gt"
+      duration_seconds: 300
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+    critical_memory:
+      metric: "system.memory.usage_percent"
+      threshold: 95.0
+      operator: "gt"
+      duration_seconds: 60
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    disk_space:
+      metric: "system.disk.usage_percent"
+      threshold: 85.0
+      operator: "gt"
+      duration_seconds: 600  # 10 minutes
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+    critical_disk_space:
+      metric: "system.disk.usage_percent"
+      threshold: 95.0
+      operator: "gt"
+      duration_seconds: 300
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    high_load:
+      metric: "system.load.1min"
+      threshold: 2.0
+      operator: "gt"
+      duration_seconds: 600
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+  # Application alerts
+  application:
+    app_unhealthy:
+      metric: "app.health.status"
+      threshold: 0.5
+      operator: "lt"
+      duration_seconds: 30
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    slow_response:
+      metric: "app.health.response_time_ms"
+      threshold: 2000.0  # 2 seconds
+      operator: "gt"
+      duration_seconds: 300
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+    critical_response:
+      metric: "app.health.response_time_ms"
+      threshold: 5000.0  # 5 seconds
+      operator: "gt"
+      duration_seconds: 60
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    database_down:
+      metric: "db.status"
+      threshold: 0.5
+      operator: "lt"
+      duration_seconds: 30
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+    high_error_rate:
+      metric: "app.error_rate_percent"
+      threshold: 5.0
+      operator: "gt"
+      duration_seconds: 300
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "log"]
+
+    critical_error_rate:
+      metric: "app.error_rate_percent"
+      threshold: 10.0
+      operator: "gt"
+      duration_seconds: 60
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+  # Business alerts
+  business:
+    high_ai_costs:
+      metric: "business.ai_calls.cost_today"
+      threshold: 100.0  # $100 per day
+      operator: "gt"
+      duration_seconds: 300
+      severity: "warning"
+      enabled: true
+      channels: ["slack", "email"]
+
+    critical_ai_costs:
+      metric: "business.ai_calls.cost_today"
+      threshold: 500.0  # $500 per day
+      operator: "gt"
+      duration_seconds: 60
+      severity: "critical"
+      enabled: true
+      channels: ["slack", "email", "log"]
+
+# Notification Channels
+notifications:
+  slack:
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channels:
+      default: "#alerts"
+      critical: "#critical-alerts"
+      monitoring: "#monitoring"
+
+    templates:
+      alert_triggered: |
+        🚨 **ALERT TRIGGERED**: {{alert_name}}
+        **Metric**: {{metric_name}}
+        **Current Value**: {{current_value}}
+        **Threshold**: {{threshold}}
+        **Severity**: {{severity}}
+        **Time**: {{timestamp}}
+
+      alert_resolved: |
+        ✅ **ALERT RESOLVED**: {{alert_name}}
+        **Metric**: {{metric_name}}
+        **Duration**: {{duration}}
+        **Time**: {{timestamp}}
+
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "${EMAIL_USERNAME}"
+    password: "${EMAIL_PASSWORD}"
+    from_address: "monitoring@maurinventures.com"
+
+    recipients:
+      critical: ["admin@maurinventures.com", "dev-team@maurinventures.com"]
+      warning: ["admin@maurinventures.com"]
+
+  log:
+    level: "INFO"
+    format: "[MONITORING] %(asctime)s - %(levelname)s - %(message)s"
+    file: "monitoring_alerts.log"
+    max_file_size_mb: 100
+    backup_count: 5
+
+# Dashboard Configuration
+dashboard:
+  refresh_interval_seconds: 30
+  data_points_displayed: 100
+
+  # Dashboard sections
+  sections:
+    system_overview:
+      enabled: true
+      metrics:
+        - "system.cpu.usage_percent"
+        - "system.memory.usage_percent"
+        - "system.disk.usage_percent"
+        - "system.load.1min"
+
+    application_health:
+      enabled: true
+      metrics:
+        - "app.health.status"
+        - "app.health.response_time_ms"
+        - "db.status"
+        - "db.connection_time_ms"
+
+    performance:
+      enabled: true
+      metrics:
+        - "app.requests_per_second"
+        - "app.error_rate_percent"
+        - "app.p95_response_time"
+        - "app.active_connections"
+
+    business_metrics:
+      enabled: true
+      metrics:
+        - "business.ai_calls.total"
+        - "business.ai_calls.cost_today"
+        - "business.users.active_sessions"
+        - "business.deployments.frequency"
+
+  # Chart configurations
+  charts:
+    time_series:
+      time_range_hours: 24
+      aggregation_interval_minutes: 5
+
+    gauges:
+      warning_threshold: 80
+      critical_threshold: 95
+
+# Health Check Configuration
+health_checks:
+  enabled: true
+  interval_seconds: 30
+
+  endpoints:
+    api_health:
+      url: "http://localhost:5001/api/health"
+      timeout_seconds: 10
+      expected_status: 200
+      check_response_json: true
+
+    frontend:
+      url: "http://localhost:5001/"
+      timeout_seconds: 10
+      expected_status: 200
+      check_content_type: "text/html"
+
+    authentication:
+      url: "http://localhost:5001/api/auth/me"
+      timeout_seconds: 10
+      expected_status: 401  # Expect 401 for unauthenticated request
+
+  failure_thresholds:
+    consecutive_failures: 3
+    failure_rate_percent: 50
+    time_window_minutes: 10
+
+# Performance Monitoring
+performance:
+  response_time_tracking:
+    enabled: true
+    percentiles: [50, 75, 90, 95, 99]
+    slow_request_threshold_ms: 1000
+
+  request_tracking:
+    enabled: true
+    sample_rate: 1.0  # Sample 100% of requests
+    max_tracked_requests: 10000
+
+  error_tracking:
+    enabled: true
+    error_rate_window_minutes: 5
+    track_error_details: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+
+    file:
+      enabled: true
+      level: "DEBUG"
+      filename: "monitoring.log"
+      max_file_size_mb: 50
+      backup_count: 3
+
+    syslog:
+      enabled: false
+      facility: "local0"
+
+# Integration Settings
+integrations:
+  prometheus:
+    enabled: false
+    port: 8000
+    path: "/metrics"
+
+  grafana:
+    enabled: false
+    dashboard_url: "http://localhost:3000"
+
+  datadog:
+    enabled: false
+    api_key: "${DATADOG_API_KEY}"
+
+# Security Configuration
+security:
+  api_access:
+    enabled: true
+    api_key: "${MONITORING_API_KEY}"
+    allowed_ips: ["127.0.0.1", "10.0.0.0/8"]
+
+  data_encryption:
+    enabled: false
+    encryption_key: "${MONITORING_ENCRYPTION_KEY}"
+
+# Maintenance Settings
+maintenance:
+  backup:
+    enabled: true
+    interval_hours: 24
+    retention_days: 7
+    backup_path: "./monitoring_backups"
+
+  optimization:
+    enabled: true
+    vacuum_interval_hours: 168  # Weekly
+    reindex_interval_hours: 672  # Monthly
+
+# Development/Debug Settings
+debug:
+  enabled: false
+  verbose_logging: false
+  metric_validation: true
+  performance_profiling: false
