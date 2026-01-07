@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Create user account for joy@maurinventures.com
+Create admin user account for joy@maurinventures.com with proper password hashing.
+This user will have admin privileges as configured in the system.
 """
 
 import hashlib
@@ -18,11 +19,11 @@ except Exception as e:
     sys.exit(1)
 
 def create_user_account():
-    """Create user account with email verification already enabled."""
+    """Create admin user account with specified credentials."""
 
     email = "joy@maurinventures.com"
     name = "Joy"
-    password = "temppass123"  # You can change this after first login
+    password = "Admin123450!"  # Admin password as requested
 
     print(f"🔑 Creating account for {email}")
     print("=" * 40)
@@ -53,14 +54,15 @@ def create_user_account():
             db_session.add(user)
             db_session.commit()
 
-            print(f"✅ Successfully created user account!")
+            print(f"✅ Successfully created admin user account!")
             print(f"📧 Email: {email}")
             print(f"👤 Name: {name}")
             print(f"🔑 Password: {password}")
+            print(f"⚡ Admin Status: YES (configured in ADMIN_EMAILS)")
             print(f"")
-            print(f"🌐 Now you can login at: http://localhost:3000")
+            print(f"🌐 Login at: https://maurinventuresinternal.com")
             print(f"")
-            print(f"💡 Remember to change your password after first login!")
+            print(f"🛡️ This user has admin privileges in the system!")
 
             return True
 
