@@ -1,8 +1,13 @@
 # Claude Code Rules for Internal Platform
 
+# PROJECT RULES - DO NOT VIOLATE
+1. PRODUCTION ONLY: API endpoint is https://maurinventuresinternal.com - never localhost
+2. FRONTEND REPO: Digitalbrainplatformuidesign is the only frontend - do not modify internal-platform/frontend/
+3. NO UI CHANGES: Never regenerate or restyle UI components from Digitalbrainplatformuidesign
+
 **Project:** Internal Platform
 **Architecture:** React frontend + Flask API
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-07
 
 ---
 

@@ -1,9 +1,7 @@
-"""
-Deployment Workflow (Prompt 28)
-
-Manual and automated deployment workflow with blue-green deployment support,
-health checks, smoke tests, and automatic rollback capabilities.
-"""
+# Deployment Workflow (Prompt 28)
+#
+# Manual and automated deployment workflow with blue-green deployment support,
+# health checks, smoke tests, and automatic rollback capabilities.
 
 name: Deploy Application
 
