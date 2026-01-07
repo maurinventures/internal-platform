@@ -1,11 +1,15 @@
 /**
  * Login Form Component
  *
- * Handles primary login with email/password and directs to 2FA flow if needed.
+ * Updated with Figma Make UI components while preserving API integration logic.
  */
 
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Mail, Lock, LogIn } from 'lucide-react';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -48,99 +52,92 @@ export function LoginForm({ onSuccess, onRequire2FA, onRequire2FASetup }: LoginF
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to Internal Platform
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Access your AI-powered content creation workspace
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-semibold mb-2">Internal Platform</h1>
+          <p className="text-muted-foreground">Sign in to your AI-powered workspace</p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-800">{error}</div>
-            </div>
-          )}
+        <div className="bg-card border border-border rounded-lg p-8 shadow-sm">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4">
+                <div className="text-sm text-destructive">{error}</div>
+              </div>
+            )}
 
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="pl-10"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your password"
-                value={formData.password}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="pl-10"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              <a href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot your password?
-              </a>
-            </div>
-          </div>
-
-          <div>
-            <button
+            <Button
               type="submit"
+              className="w-full"
+              size="lg"
               disabled={isLoading || !formData.email || !formData.password}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
                   Signing in...
                 </span>
               ) : (
-                'Sign in'
+                <>
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Sign In
+                </>
               )}
-            </button>
-          </div>
+            </Button>
+          </form>
+        </div>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                Sign up
-              </a>
-            </p>
-          </div>
-        </form>
+        <div className="flex flex-col items-center gap-2 text-center mt-6">
+          <button
+            className="text-[12px] text-primary hover:underline active:text-primary/80 transition-colors"
+            onClick={() => window.location.href = '/forgot-password'}
+          >
+            Forgot password?
+          </button>
+          <button
+            onClick={() => window.location.href = '/register'}
+            className="text-[12px] text-primary hover:underline active:text-primary/80 transition-colors"
+          >
+            Create a new account
+          </button>
+        </div>
       </div>
     </div>
   );

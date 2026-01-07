@@ -6,8 +6,10 @@ from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -18,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
     create_engine,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -393,6 +396,16 @@ class AILog(Base):
     input_tokens = Column(Integer, nullable=True)  # Token count (if available)
     output_tokens = Column(Integer, nullable=True)
 
+    # RAG Integration Metrics (Prompt 18)
+    search_method = Column(String(20), nullable=True)  # 'rag', 'keyword', 'hybrid', 'rag_failed'
+    rag_chunks_used = Column(Integer, nullable=True)  # Number of RAG chunks included in context
+    rag_similarity_scores = Column(JSONB, nullable=True)  # Array of similarity scores for chunks used
+    rag_embedding_cost = Column(Float, nullable=True)  # Cost of query embedding ($)
+    rag_search_time_ms = Column(Float, nullable=True)  # Time for RAG search only
+    context_compression_ratio = Column(Float, nullable=True)  # Old tokens / New tokens
+    estimated_cost_savings = Column(Float, nullable=True)  # $ saved vs full transcript approach
+    rag_fallback_reason = Column(String(100), nullable=True)  # Why fallback was used if applicable
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -757,6 +770,218 @@ class ExternalContentSegment(Base):
 
     # Relationships
     content = relationship("ExternalContent", back_populates="segments")
+
+
+# ============================================================================
+# RAG (Retrieval-Augmented Generation) Models
+# ============================================================================
+
+class CorpusSummary(Base):
+    """Global knowledge base metadata and statistics."""
+    __tablename__ = "corpus_summary"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+    # Corpus metadata
+    title = Column(String(500), nullable=False, default="Internal Platform Knowledge Base")
+    description = Column(Text)
+
+    # Statistics (updated by triggers)
+    total_documents = Column(Integer, default=0)
+    total_sections = Column(Integer, default=0)
+    total_chunks = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+
+    # Version tracking
+    version = Column(Integer, default=1)
+    last_updated = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+
+class RAGDocument(Base):
+    """Document-level summaries and metadata for RAG system."""
+    __tablename__ = "rag_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+    # Polymorphic reference to source content
+    source_type = Column(String(50), nullable=False)
+    source_id = Column(UUID(as_uuid=True), nullable=False)
+
+    # Document metadata
+    title = Column(String(500), nullable=False)
+    content_type = Column(String(50), nullable=False)
+    author = Column(String(255))
+    content_date = Column(Date)
+    language = Column(String(10), default='en')
+
+    # AI-generated summaries
+    summary = Column(Text)
+    summary_embedding = Column(ARRAY(Float))  # OpenAI text-embedding-3-small (1536 dims)
+
+    # Content statistics
+    word_count = Column(Integer)
+    character_count = Column(Integer)
+    section_count = Column(Integer, default=0)
+    chunk_count = Column(Integer, default=0)
+
+    # Processing metadata
+    processing_status = Column(String(50), default='pending')
+    embedding_model = Column(String(100), default='text-embedding-3-small')
+    processed_at = Column(DateTime(timezone=True))
+    processing_error = Column(Text)
+
+    # Quality metrics
+    content_quality_score = Column(Numeric(3,2))  # 0.00 to 1.00
+    embedding_quality_score = Column(Numeric(3,2))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+    # Relationships
+    sections = relationship("RAGSection", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship("RAGChunk", back_populates="document", cascade="all, delete-orphan")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('source_type', 'source_id', name='rag_documents_source_unique'),
+        CheckConstraint(
+            source_type.in_(['video', 'audio', 'external_content', 'document', 'social_post']),
+            name='rag_documents_source_type_check'
+        ),
+        CheckConstraint(
+            processing_status.in_(['pending', 'processing', 'completed', 'error', 'updated']),
+            name='rag_documents_status_check'
+        ),
+    )
+
+
+class RAGSection(Base):
+    """Section-level summaries and logical groupings within documents."""
+    __tablename__ = "rag_sections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    document_id = Column(UUID(as_uuid=True), ForeignKey('rag_documents.id', ondelete='CASCADE'), nullable=False)
+
+    # Polymorphic reference to source segment/section
+    source_type = Column(String(50), nullable=False)
+    source_id = Column(UUID(as_uuid=True))  # Can be NULL for logical sections
+
+    # Section metadata
+    section_index = Column(Integer, nullable=False)  # Order within document
+    title = Column(String(500))
+    section_type = Column(String(50))  # chapter, paragraph, speaker_turn, time_segment, etc.
+
+    # Timing information (for audio/video content)
+    start_time = Column(Numeric(10, 3))
+    end_time = Column(Numeric(10, 3))
+    duration_seconds = Column(Numeric(10, 3))
+
+    # Position information (for text content)
+    start_position = Column(Integer)
+    end_position = Column(Integer)
+
+    # Speaker information (for transcripts)
+    speaker = Column(String(255))
+
+    # Content
+    content_text = Column(Text)
+    summary = Column(Text)
+    summary_embedding = Column(ARRAY(Float))  # Smaller embedding for section summaries (768 dims)
+
+    # Content statistics
+    word_count = Column(Integer)
+    character_count = Column(Integer)
+    chunk_count = Column(Integer, default=0)
+
+    # Quality and confidence
+    confidence = Column(Numeric(5,4))  # For transcribed content
+    content_quality_score = Column(Numeric(3,2))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+    # Relationships
+    document = relationship("RAGDocument", back_populates="sections")
+    chunks = relationship("RAGChunk", back_populates="section", cascade="all, delete-orphan")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('document_id', 'section_index', name='rag_sections_document_section_unique'),
+        CheckConstraint(
+            source_type.in_([
+                'transcript_segment', 'audio_segment', 'external_content_segment',
+                'logical_section', 'document_section'
+            ]),
+            name='rag_sections_source_type_check'
+        ),
+    )
+
+
+class RAGChunk(Base):
+    """Searchable text chunks with embeddings (~400 tokens each)."""
+    __tablename__ = "rag_chunks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    document_id = Column(UUID(as_uuid=True), ForeignKey('rag_documents.id', ondelete='CASCADE'), nullable=False)
+    section_id = Column(UUID(as_uuid=True), ForeignKey('rag_sections.id', ondelete='CASCADE'))
+
+    # Chunk metadata
+    chunk_index = Column(Integer, nullable=False)  # Global order within document
+    section_chunk_index = Column(Integer)  # Order within section
+
+    # Content
+    content_text = Column(Text, nullable=False)
+    content_hash = Column(String(64))  # SHA-256 hash for deduplication
+
+    # Token information
+    token_count = Column(Integer, nullable=False)
+    character_count = Column(Integer, nullable=False)
+
+    # Embedding and search
+    embedding = Column(ARRAY(Float), nullable=False)  # Must have embedding for RAG (1536 dims)
+    embedding_model = Column(String(100), default='text-embedding-3-small')
+
+    # Context for continuity
+    context_before = Column(Text)  # Previous chunk text for smooth reading
+    context_after = Column(Text)   # Next chunk text for continuity
+    context_window_size = Column(Integer, default=0)  # Characters of overlap
+
+    # Source tracking and provenance
+    source_references = Column(JSONB, default='[]')  # Array of source segment references
+    source_metadata = Column(JSONB, default='{}')    # Additional metadata from source
+
+    # Timing/position (inherited from section)
+    start_time = Column(Numeric(10, 3))
+    end_time = Column(Numeric(10, 3))
+    start_position = Column(Integer)
+    end_position = Column(Integer)
+
+    # Quality and relevance scores
+    content_quality_score = Column(Numeric(3,2))
+    embedding_quality_score = Column(Numeric(3,2))
+    information_density = Column(Numeric(3,2))  # How much info per token
+
+    # Processing metadata
+    processed_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+    processing_version = Column(Integer, default=1)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+    # Relationships
+    document = relationship("RAGDocument", back_populates="chunks")
+    section = relationship("RAGSection", back_populates="chunks")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('document_id', 'chunk_index', name='rag_chunks_document_chunk_unique'),
+        CheckConstraint('token_count > 0', name='rag_chunks_token_count_positive'),
+    )
 
 
 # Database session management

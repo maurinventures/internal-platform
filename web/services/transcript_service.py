@@ -12,8 +12,10 @@ from datetime import datetime
 # Import database models and session
 try:
     from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment
+    from .rag_service import RAGService  # Prompt 18: RAG Integration
 except ImportError:
     from ..scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment
+    from .rag_service import RAGService  # Prompt 18: RAG Integration
 
 
 class TranscriptService:
@@ -30,9 +32,10 @@ class TranscriptService:
     }
 
     @staticmethod
-    def search_for_context(query: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    def search_for_context(query: str, limit: int = 1000, use_rag: bool = True) -> List[Dict[str, Any]]:
         """
         Advanced transcript search with intelligent keyword weighting and context expansion.
+        Now supports RAG-based semantic search as primary method (Prompt 18).
 
         This function prioritizes rare/specific keywords over common words and provides
         expanded context by including surrounding segments for better AI generation.
@@ -40,10 +43,60 @@ class TranscriptService:
         Args:
             query: Search query string
             limit: Maximum number of results to return
+            use_rag: Whether to use RAG semantic search (default: True)
 
         Returns:
             List of transcript segments with metadata, scored and sorted by relevance
         """
+
+        # Prompt 18: RAG Integration - Try RAG search first
+        if use_rag:
+            try:
+                print(f"[TRANSCRIPT_SERVICE] Attempting RAG search for: {query}")
+
+                # Use RAG service for semantic search
+                rag_service = RAGService()
+                rag_result = rag_service.search_with_rag(
+                    query,
+                    limit=min(limit, 50),  # RAG provides more focused results
+                    similarity_threshold=0.65  # Slightly lower threshold for broader results
+                )
+
+                if rag_result.chunks_found > 0:
+                    print(f"[TRANSCRIPT_SERVICE] RAG found {rag_result.chunks_found} chunks, converting to transcript format")
+
+                    # Convert RAG chunks to transcript segment format
+                    transcript_results = []
+                    for chunk in rag_result.chunks:
+                        # Construct transcript segment dict that matches existing format
+                        segment = {
+                            'id': chunk.chunk_id,
+                            'video_id': chunk.video_id or 'unknown',
+                            'start': chunk.start_time or 0.0,
+                            'end': chunk.end_time or 0.0,
+                            'text': chunk.content_text,
+                            'speaker': chunk.speaker or 'Unknown',
+                            'video_title': chunk.document_title or 'Unknown',
+                            'event_name': chunk.document_title or 'Unknown',
+                            'event_date': chunk.content_date or 'Unknown',
+                            'year': int(chunk.content_date[:4]) if chunk.content_date and len(chunk.content_date) >= 4 else None,
+                            'filename': f"rag_chunk_{chunk.chunk_id[:8]}",
+                            'relevance_score': chunk.combined_score,
+                            'search_method': 'rag'  # Identify as RAG result
+                        }
+                        transcript_results.append(segment)
+
+                    print(f"[TRANSCRIPT_SERVICE] Successfully converted {len(transcript_results)} RAG chunks to transcript format")
+                    return transcript_results[:limit]  # Return RAG results directly
+                else:
+                    print(f"[TRANSCRIPT_SERVICE] RAG search found no results, falling back to keyword search")
+
+            except Exception as e:
+                print(f"[TRANSCRIPT_SERVICE ERROR] RAG search failed, falling back to keyword search: {e}")
+
+        # Fallback to original keyword search (preserves all existing functionality)
+        print(f"[TRANSCRIPT_SERVICE] Using keyword search for: {query}")
+
         # Extract meaningful keywords (3+ chars, excluding stop words)
         keywords = [
             w for w in re.findall(r'\b\w{3,}\b', query.lower())

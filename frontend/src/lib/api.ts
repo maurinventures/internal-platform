@@ -26,6 +26,11 @@ import {
   ExternalContentCreateRequest,
   ExternalContentUpdateRequest,
   ExternalContentSearchOptions,
+  VideoDownloadOptionsResponse,
+  ClipDownloadResponse,
+  VideoDownloadResponse,
+  ClipDownloadOptions,
+  VideoDownloadOptions,
 } from '../types';
 
 // Base configuration
@@ -335,11 +340,38 @@ class ApiClient {
     getClipPreview: (id: string) =>
       this.get<{ url: string }>(`/api/clip-preview/${id}`),
 
+    // Enhanced download methods for Prompt 11
+    getDownloadOptions: (id: string) =>
+      this.get<VideoDownloadOptionsResponse>(`/api/video/${id}/download-options`),
+
+    downloadClipSegment: (id: string, options: ClipDownloadOptions) => {
+      const params = new URLSearchParams();
+      params.set('start', options.start.toString());
+      params.set('end', options.end.toString());
+      if (options.metadata !== undefined) {
+        params.set('metadata', options.metadata.toString());
+      }
+      if (options.timeout !== undefined) {
+        params.set('timeout', Math.min(options.timeout, 900).toString());
+      }
+      return this.get<ClipDownloadResponse>(`/api/clip-download/${id}?${params}`);
+    },
+
+    downloadFullVideo: (id: string, options: VideoDownloadOptions = {}) => {
+      const params = new URLSearchParams();
+      if (options.metadata !== undefined) {
+        params.set('metadata', options.metadata.toString());
+      }
+      const queryString = params.toString();
+      return this.get<VideoDownloadResponse>(`/api/video-download/${id}${queryString ? '?' + queryString : ''}`);
+    },
+
+    // Legacy methods (kept for backward compatibility)
     downloadClip: (id: string) =>
-      this.get<{ download_url: string }>(`/api/clip-download/${id}`),
+      this.get<{ download_url: string }>(`/api/clip-download/${id}?metadata=false`),
 
     downloadFull: (id: string) =>
-      this.get<{ download_url: string }>(`/api/video-download/${id}`),
+      this.get<{ download_url: string }>(`/api/video-download/${id}?metadata=false`),
 
     autofill: (id: string) =>
       this.post<ApiResponse>(`/api/videos/${id}/autofill`),

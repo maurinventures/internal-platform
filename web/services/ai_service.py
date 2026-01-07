@@ -22,10 +22,12 @@ try:
     from scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, AILog, Persona, SocialPost, ScriptFeedback, Conversation
     from scripts.config_loader import get_config
     from .video_service import VideoService
+    from .rag_service import RAGService  # Prompt 18: RAG Integration
 except ImportError:
     from ..scripts.db import DatabaseSession, Video, Transcript, TranscriptSegment, AILog, Persona, SocialPost, ScriptFeedback, Conversation
     from ..scripts.config_loader import get_config
     from .video_service import VideoService
+    from .rag_service import RAGService  # Prompt 18: RAG Integration
 
 
 class AIService:
@@ -76,7 +78,16 @@ class AIService:
         input_tokens: int = None,
         output_tokens: int = None,
         user_id: str = None,
-        conversation_id: str = None
+        conversation_id: str = None,
+        # RAG Integration Metrics (Prompt 18)
+        search_method: str = None,
+        rag_chunks_used: int = None,
+        rag_similarity_scores: list = None,
+        rag_embedding_cost: float = None,
+        rag_search_time_ms: float = None,
+        context_compression_ratio: float = None,
+        estimated_cost_savings: float = None,
+        rag_fallback_reason: str = None
     ):
         """Log an AI API call for quality monitoring."""
         try:
@@ -95,7 +106,16 @@ class AIService:
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     user_id=UUID(user_id) if user_id else None,
-                    conversation_id=UUID(conversation_id) if conversation_id else None
+                    conversation_id=UUID(conversation_id) if conversation_id else None,
+                    # RAG Integration Metrics (Prompt 18)
+                    search_method=search_method,
+                    rag_chunks_used=rag_chunks_used,
+                    rag_similarity_scores=rag_similarity_scores,
+                    rag_embedding_cost=rag_embedding_cost,
+                    rag_search_time_ms=rag_search_time_ms,
+                    context_compression_ratio=context_compression_ratio,
+                    estimated_cost_savings=estimated_cost_savings,
+                    rag_fallback_reason=rag_fallback_reason
                 )
                 db_session.add(log_entry)
                 db_session.commit()
@@ -158,7 +178,8 @@ class AIService:
         model: str = "gpt-4o",
         exclude_clips: list = None,
         user_id: str = None,
-        conversation_id: str = None
+        conversation_id: str = None,
+        use_rag: bool = True  # Prompt 18: RAG Integration toggle
     ):
         """Generate a script using AI with verified transcript data."""
 
@@ -215,38 +236,102 @@ class AIService:
                 exclude_text += f"- video_id: {clip.get('video_id')} | {clip.get('start_time', 0):.1f}s-{clip.get('end_time', 0):.1f}s | \"{clip.get('text', '')[:80]}...\"\n"
             exclude_text += "\nYou MUST use DIFFERENT clips than the ones listed above.\n"
 
-        # Build context from transcripts
-        # GPT-4o has 30k token limit, Claude has 200k - adjust accordingly
-        is_claude = model.startswith("claude")
-        max_segments = 300 if is_claude else 80  # Claude can handle more context
-        max_chars = 100000 if is_claude else 20000  # Rough char limits
-
+        # Prompt 18: RAG Integration - Context assembly logic
         context_text = ""
-        seen_passages = set()
-        total_chars = 0
+        search_method = "unknown"
+        rag_chunks_used = 0
+        rag_similarity_scores = []
+        rag_embedding_cost = 0.0
+        rag_search_time_ms = 0.0
+        context_compression_ratio = 1.0
+        estimated_cost_savings = 0.0
+        rag_fallback_reason = None
 
-        for t in transcript_context[:max_segments]:
-            passage_key = (t['video_id'], round(t['start'], 0))
-            if passage_key in seen_passages:
-                continue
-            seen_passages.add(passage_key)
+        if use_rag:
+            try:
+                # Use RAG search for context
+                rag_service = RAGService()
 
-            text = t["text"].strip()
+                # Determine max tokens based on model
+                is_claude = model.startswith("claude")
+                max_rag_tokens = 5000 if is_claude else 3000  # Conservative token limits for RAG context
 
-            # Only skip truly unusable segments (very short)
-            if len(text) < 15:
-                continue
+                # Perform RAG search
+                rag_result = rag_service.search_with_rag(
+                    user_message,
+                    limit=20,
+                    similarity_threshold=0.7
+                )
 
-            # Check if we'd exceed character limit
-            entry = f"[{t.get('event_date', 'Unknown')} | {t.get('speaker', 'Unknown')}]\n"
-            entry += f"Video: {t['video_title']} | {t['start']:.1f}s-{t['end']:.1f}s | ID:{t['video_id']}\n"
-            entry += f'"{text}"\n\n'
+                if rag_result.chunks_found > 0:
+                    # Assemble RAG context
+                    context_text = rag_service.assemble_context_from_chunks(
+                        rag_result.chunks,
+                        max_tokens=max_rag_tokens
+                    )
 
-            if total_chars + len(entry) > max_chars:
-                break
+                    # Track RAG metrics
+                    search_method = rag_result.search_method
+                    rag_chunks_used = len(rag_result.chunks)
+                    rag_similarity_scores = [c.combined_score for c in rag_result.chunks]
+                    rag_embedding_cost = rag_result.embedding_cost
+                    rag_search_time_ms = rag_result.total_time_ms
 
-            context_text += entry
-            total_chars += len(entry)
+                    # Calculate compression ratio and savings
+                    old_context_chars = sum(len(t.get('text', '')) for t in transcript_context[:300])
+                    new_context_chars = len(context_text)
+                    context_compression_ratio = old_context_chars / max(new_context_chars, 1)
+
+                    # Estimate cost savings (rough calculation)
+                    old_tokens = old_context_chars / 4  # ~4 chars per token
+                    new_tokens = new_context_chars / 4
+                    token_cost_per_k = 0.003 if is_claude else 0.0025  # Rough input costs
+                    estimated_cost_savings = (old_tokens - new_tokens) * token_cost_per_k / 1000
+
+                    print(f"[RAG] Found {rag_chunks_used} chunks, {context_compression_ratio:.1f}x compression, ${estimated_cost_savings:.3f} saved")
+                else:
+                    rag_fallback_reason = "no_chunks_found"
+                    use_rag = False  # Fall back to keyword search
+
+            except Exception as e:
+                print(f"[RAG ERROR] RAG search failed, falling back to keyword search: {e}")
+                rag_fallback_reason = f"rag_error: {str(e)[:50]}"
+                use_rag = False  # Fall back to keyword search
+
+        # Fallback to keyword search if RAG disabled or failed
+        if not use_rag:
+            search_method = "keyword_fallback"
+
+            # Original context assembly logic (preserved)
+            is_claude = model.startswith("claude")
+            max_segments = 300 if is_claude else 80  # Claude can handle more context
+            max_chars = 100000 if is_claude else 20000  # Rough char limits
+
+            seen_passages = set()
+            total_chars = 0
+
+            for t in transcript_context[:max_segments]:
+                passage_key = (t['video_id'], round(t['start'], 0))
+                if passage_key in seen_passages:
+                    continue
+                seen_passages.add(passage_key)
+
+                text = t["text"].strip()
+
+                # Only skip truly unusable segments (very short)
+                if len(text) < 15:
+                    continue
+
+                # Check if we'd exceed character limit
+                entry = f"[{t.get('event_date', 'Unknown')} | {t.get('speaker', 'Unknown')}]\n"
+                entry += f"Video: {t['video_title']} | {t['start']:.1f}s-{t['end']:.1f}s | ID:{t['video_id']}\n"
+                entry += f'"{text}"\n\n'
+
+                if total_chars + len(entry) > max_chars:
+                    break
+
+                context_text += entry
+                total_chars += len(entry)
 
         system_prompt = f"""You are a video script creator. You have access to a database of transcript segments below.
 
@@ -449,7 +534,16 @@ TRANSCRIPT DATA:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                # RAG Integration Metrics (Prompt 18)
+                search_method=search_method,
+                rag_chunks_used=rag_chunks_used,
+                rag_similarity_scores=rag_similarity_scores,
+                rag_embedding_cost=rag_embedding_cost,
+                rag_search_time_ms=rag_search_time_ms,
+                context_compression_ratio=context_compression_ratio,
+                estimated_cost_savings=estimated_cost_savings,
+                rag_fallback_reason=rag_fallback_reason
             )
 
             return {
@@ -470,7 +564,16 @@ TRANSCRIPT DATA:
                 error_message=str(e),
                 latency_ms=latency_ms,
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                # RAG Integration Metrics (Prompt 18) - Use defaults for error case
+                search_method=locals().get('search_method', 'error'),
+                rag_chunks_used=locals().get('rag_chunks_used', 0),
+                rag_similarity_scores=locals().get('rag_similarity_scores', []),
+                rag_embedding_cost=locals().get('rag_embedding_cost', 0.0),
+                rag_search_time_ms=locals().get('rag_search_time_ms', 0.0),
+                context_compression_ratio=locals().get('context_compression_ratio', 1.0),
+                estimated_cost_savings=locals().get('estimated_cost_savings', 0.0),
+                rag_fallback_reason=locals().get('rag_fallback_reason', f"error_early: {str(e)[:50]}")
             )
 
             return {
@@ -489,7 +592,8 @@ TRANSCRIPT DATA:
         conversation_history: list,
         model: str = "claude-sonnet",
         user_id: str = None,
-        conversation_id: str = None
+        conversation_id: str = None,
+        use_rag: bool = True  # Prompt 18: RAG Integration toggle
     ) -> dict:
         """Generate copy in a persona's voice using their content as reference."""
 
@@ -543,12 +647,70 @@ KEY TOPICS: {p_topics}
 VOCABULARY/PHRASES: {p_vocabulary}
 """
 
-        # Build transcript context for reference material
+        # Prompt 18: RAG Integration - Context assembly for copy generation
         context_text = ""
-        for t in transcript_context[:50]:  # Limit context
-            text = t["text"].strip()
-            if len(text) > 30:
-                context_text += f'"{text}"\n\n'
+        search_method = "unknown"
+        rag_chunks_used = 0
+        rag_similarity_scores = []
+        rag_embedding_cost = 0.0
+        rag_search_time_ms = 0.0
+        context_compression_ratio = 1.0
+        estimated_cost_savings = 0.0
+        rag_fallback_reason = None
+
+        if use_rag:
+            try:
+                # Use RAG search for copy generation context
+                rag_service = RAGService()
+
+                # Perform RAG search with a focus on copy-relevant content
+                rag_result = rag_service.search_with_rag(
+                    f"{user_message} {persona_name} {platform}",  # Include persona and platform for better relevance
+                    limit=15,  # Fewer chunks for copy generation
+                    similarity_threshold=0.75  # Higher threshold for more relevant content
+                )
+
+                if rag_result.chunks_found > 0:
+                    # Assemble RAG context with copy-specific formatting
+                    context_text = ""
+                    for chunk in rag_result.chunks[:10]:  # Limit for copy generation
+                        context_text += f'"{chunk.content_text}"\n\n'
+
+                    # Track RAG metrics
+                    search_method = rag_result.search_method
+                    rag_chunks_used = len(rag_result.chunks)
+                    rag_similarity_scores = [c.combined_score for c in rag_result.chunks]
+                    rag_embedding_cost = rag_result.embedding_cost
+                    rag_search_time_ms = rag_result.total_time_ms
+
+                    # Calculate compression ratio for copy generation
+                    old_context_chars = sum(len(t.get('text', '')) for t in transcript_context[:50])
+                    new_context_chars = len(context_text)
+                    context_compression_ratio = old_context_chars / max(new_context_chars, 1)
+
+                    # Estimate cost savings
+                    old_tokens = old_context_chars / 4
+                    new_tokens = new_context_chars / 4
+                    token_cost_per_k = 0.003  # Claude cost
+                    estimated_cost_savings = (old_tokens - new_tokens) * token_cost_per_k / 1000
+
+                    print(f"[RAG COPY] Found {rag_chunks_used} chunks for {persona_name} on {platform}, {context_compression_ratio:.1f}x compression")
+                else:
+                    rag_fallback_reason = "no_chunks_found_copy"
+                    use_rag = False
+
+            except Exception as e:
+                print(f"[RAG COPY ERROR] RAG search failed, falling back to keyword search: {e}")
+                rag_fallback_reason = f"rag_error_copy: {str(e)[:50]}"
+                use_rag = False
+
+        # Fallback to original context assembly if RAG disabled or failed
+        if not use_rag:
+            search_method = "keyword_fallback_copy"
+            for t in transcript_context[:50]:  # Original logic
+                text = t["text"].strip()
+                if len(text) > 30:
+                    context_text += f'"{text}"\n\n'
 
         # Platform-specific instructions
         platform_instructions = {
@@ -628,7 +790,16 @@ IMPORTANT:
                 success=True,
                 latency_ms=latency_ms,
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                # RAG Integration Metrics (Prompt 18)
+                search_method=search_method,
+                rag_chunks_used=rag_chunks_used,
+                rag_similarity_scores=rag_similarity_scores,
+                rag_embedding_cost=rag_embedding_cost,
+                rag_search_time_ms=rag_search_time_ms,
+                context_compression_ratio=context_compression_ratio,
+                estimated_cost_savings=estimated_cost_savings,
+                rag_fallback_reason=rag_fallback_reason
             )
 
             return {
@@ -651,7 +822,16 @@ IMPORTANT:
                 error_message=str(e),
                 latency_ms=latency_ms,
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                # RAG Integration Metrics (Prompt 18) - Use defaults for error case
+                search_method=locals().get('search_method', 'error_copy'),
+                rag_chunks_used=locals().get('rag_chunks_used', 0),
+                rag_similarity_scores=locals().get('rag_similarity_scores', []),
+                rag_embedding_cost=locals().get('rag_embedding_cost', 0.0),
+                rag_search_time_ms=locals().get('rag_search_time_ms', 0.0),
+                context_compression_ratio=locals().get('context_compression_ratio', 1.0),
+                estimated_cost_savings=locals().get('estimated_cost_savings', 0.0),
+                rag_fallback_reason=locals().get('rag_fallback_reason', f"error_early_copy: {str(e)[:50]}")
             )
             return {
                 "message": f"Error generating copy: {str(e)}",

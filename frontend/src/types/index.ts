@@ -436,3 +436,77 @@ export interface PaginatedResponse<T> {
   total: number;
   has_more: boolean;
 }
+
+// Video Download types for Prompt 11
+export interface VideoDownloadOptionsResponse {
+  video_id: string;
+  title: string;
+  duration_seconds: number;
+  file_size_bytes: number;
+  format: string;
+  resolution: string;
+  download_options: {
+    full_source: {
+      endpoint: string;
+      file_size_bytes: number;
+      duration_seconds: number;
+      format: string;
+    };
+    trimmed_segment: {
+      endpoint: string;
+      parameters: {
+        start: string;
+        end: string;
+        metadata: string;
+        timeout: string;
+      };
+      max_duration: number;
+      supported_formats: string[];
+    };
+  };
+  cache_status: {
+    video_cached: boolean;
+    cache_expires_at: string | null;
+  };
+}
+
+export interface ClipDownloadResponse {
+  download_url: string;
+  metadata?: {
+    source_video_id: string;
+    title: string;
+    start_time: number;
+    end_time: number;
+    duration_seconds: number;
+    file_size_bytes: number;
+    format: string;
+    resolution: string;
+    cached: boolean;
+    processing_time_ms: number;
+  };
+}
+
+export interface VideoDownloadResponse {
+  download_url: string;
+  metadata?: {
+    video_id: string;
+    title: string;
+    duration_seconds: number;
+    file_size_bytes: number;
+    format: string;
+    resolution: string;
+    original_filename: string;
+  };
+}
+
+// Options for clip download requests
+export interface ClipDownloadOptions {
+  start: number;
+  end: number;
+  metadata?: boolean;
+  timeout?: number; // Seconds, default 300, max 900
+}
+
+export interface VideoDownloadOptions {
+  metadata?: boolean;
+}

@@ -2848,6 +2848,11 @@ def api_chat():
         model = data.get('model')  # Model can be specified in request
         previous_clips = data.get('previous_clips', [])  # Clips from previous scripts to exclude
 
+        # Prompt 18: RAG Integration - Configuration parameters
+        use_rag = data.get('use_rag', True)  # Default to RAG enabled
+        context_mode = data.get('context_mode', 'auto')  # 'rag', 'keyword', 'auto'
+        rag_similarity_threshold = data.get('rag_similarity_threshold', 0.7)  # RAG similarity threshold
+
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
@@ -2875,8 +2880,11 @@ def api_chat():
 
         # COPY GENERATION MODE
         if copy_intent['is_copy'] and copy_intent['persona_name']:
-            # Search for relevant context for copy generation
-            context = TranscriptService.search_for_context(user_message)
+            # Search for relevant context for copy generation (with RAG integration)
+            context = TranscriptService.search_for_context(
+                user_message,
+                use_rag=(use_rag and context_mode != 'keyword')
+            )
             audio_context = search_audio_for_context(user_message, limit=50)
             # Use Claude for copy generation (better at voice matching)
             copy_model = 'claude-sonnet' if not model.startswith('claude') else model
@@ -2889,7 +2897,8 @@ def api_chat():
                 conversation_history=conversation_history,
                 model=copy_model,
                 user_id=session.get('user_id'),
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                use_rag=(use_rag and context_mode != 'keyword')  # Prompt 18: RAG Integration
             )
 
             # Save messages to conversation
@@ -2915,6 +2924,15 @@ def api_chat():
                         conv.updated_at = datetime.utcnow()
                     db_session.commit()
 
+            # Detect search method used for copy generation (Prompt 18: RAG Integration)
+            copy_search_method = 'unknown'
+            if context:
+                # Check if any context items have the RAG search method indicator
+                rag_results = [c for c in context if c.get('search_method') == 'rag']
+                copy_search_method = 'rag' if rag_results else 'keyword'
+            else:
+                copy_search_method = 'none'
+
             return jsonify({
                 'response': result['message'],
                 'clips': [],
@@ -2924,13 +2942,24 @@ def api_chat():
                 'platform': copy_intent['platform'],
                 'context_segments': len(context) if context else 0,
                 'model': copy_model,
-                'conversation_id': conversation_id
+                'conversation_id': conversation_id,
+                # RAG Integration Metrics (Prompt 18)
+                'search_method': copy_search_method,
+                'rag_enabled': use_rag,
+                'context_mode': context_mode,
+                'rag_config': {
+                    'similarity_threshold': rag_similarity_threshold,
+                    'chunks_used': len([c for c in context if c.get('search_method') == 'rag']) if context else 0
+                }
             })
 
         # VIDEO SCRIPT MODE
         if script_intent:
-            # Search for relevant transcript context
-            context = TranscriptService.search_for_context(user_message)
+            # Search for relevant transcript context (with RAG integration)
+            context = TranscriptService.search_for_context(
+                user_message,
+                use_rag=(use_rag and context_mode != 'keyword')
+            )
             audio_context = search_audio_for_context(user_message, limit=50)
 
             if not context:
@@ -2975,7 +3004,8 @@ def api_chat():
             # Generate response with AI (exclude previously used clips)
             result = AIService.generate_script_with_ai(
                 user_message, context, conversation_history, model=model, exclude_clips=previous_clips,
-                user_id=session.get('user_id'), conversation_id=conversation_id
+                user_id=session.get('user_id'), conversation_id=conversation_id,
+                use_rag=(use_rag and context_mode != 'keyword')  # Prompt 18: RAG Integration
             )
 
             # Save messages to conversation
@@ -3009,6 +3039,18 @@ def api_chat():
 
                     db_session.commit()
 
+            # Detect search method used from context results (Prompt 18: RAG Integration)
+            search_method_used = 'unknown'
+            if context:
+                # Check if any context items have the RAG search method indicator
+                rag_results = [c for c in context if c.get('search_method') == 'rag']
+                if rag_results:
+                    search_method_used = 'rag'
+                else:
+                    search_method_used = 'keyword'
+            else:
+                search_method_used = 'none'
+
             return jsonify({
                 'response': result['message'],
                 'clips': result.get('clips', []),
@@ -3017,7 +3059,15 @@ def api_chat():
                 'context_segments': len(context),
                 'audio_segments': len(audio_context) if audio_context else 0,
                 'model': model,
-                'conversation_id': conversation_id
+                'conversation_id': conversation_id,
+                # RAG Integration Metrics (Prompt 18)
+                'search_method': search_method_used,
+                'rag_enabled': use_rag,
+                'context_mode': context_mode,
+                'rag_config': {
+                    'similarity_threshold': rag_similarity_threshold,
+                    'chunks_used': len([c for c in context if c.get('search_method') == 'rag']) if context else 0
+                }
             })
 
         # GENERAL CHAT MODE (default)
