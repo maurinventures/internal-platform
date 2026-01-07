@@ -4033,21 +4033,42 @@ def api_auth_me():
     return jsonify({'user': user})
 
 
+@app.route('/api/auth/test', methods=['POST'])
+def api_auth_test():
+    """Test endpoint for debugging POST requests."""
+    try:
+        return jsonify({
+            'success': True,
+            'message': 'POST request received successfully',
+            'content_type': request.content_type,
+            'is_json': request.is_json,
+            'data': str(request.get_data())[:100]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/auth/login', methods=['POST'])
 def api_auth_login():
     """API login endpoint that handles 2FA flow."""
     try:
-        # Handle JSON parsing safely
-        try:
-            print(f"Request method: {request.method}")
-            print(f"Request content type: {request.content_type}")
-            print(f"Request data: {request.get_data()}")
-            data = request.get_json(force=True) or {}
-            print(f"Parsed JSON data: {data}")
-        except Exception as json_error:
-            print(f"JSON parsing error: {json_error}")
-            print(f"Raw request data: {request.get_data()}")
-            return jsonify({'success': False, 'error': 'Invalid JSON data'}), 400
+        # Handle both JSON and form data
+        data = {}
+        if request.is_json:
+            try:
+                data = request.get_json() or {}
+            except Exception as e:
+                # Try alternative JSON parsing
+                try:
+                    import json
+                    data = json.loads(request.get_data(as_text=True)) or {}
+                except Exception:
+                    return jsonify({'success': False, 'error': 'Invalid JSON format'}), 400
+        else:
+            # Handle form data
+            data = {
+                'email': request.form.get('email', ''),
+                'password': request.form.get('password', '')
+            }
 
         email = data.get('email', '')
         password = data.get('password', '')
