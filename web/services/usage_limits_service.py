@@ -78,6 +78,24 @@ class UsageLimitsService:
         Returns:
             Dict with 'allowed', 'usage', 'limit', 'percentage', 'warning'
         """
+        # Handle demo user case
+        if user_id == 'demo-user-id':
+            # Return mock data for demo user
+            current_usage = 5000  # Demo usage
+            total_with_new = current_usage + additional_tokens
+            percentage = total_with_new / UsageLimitsService.MAX_DAILY_TOKENS_PER_USER
+
+            return {
+                'allowed': total_with_new <= UsageLimitsService.MAX_DAILY_TOKENS_PER_USER,
+                'usage': current_usage,
+                'additional': additional_tokens,
+                'total_after': total_with_new,
+                'limit': UsageLimitsService.MAX_DAILY_TOKENS_PER_USER,
+                'percentage': percentage,
+                'warning': percentage >= UsageLimitsService.WARNING_THRESHOLD,
+                'reason': f'Daily limit exceeded ({total_with_new:,}/{UsageLimitsService.MAX_DAILY_TOKENS_PER_USER:,} tokens)' if total_with_new > UsageLimitsService.MAX_DAILY_TOKENS_PER_USER else None
+            }
+
         today = datetime.utcnow().date()
         tomorrow = today + timedelta(days=1)
 
@@ -178,6 +196,26 @@ class UsageLimitsService:
     @staticmethod
     def get_user_usage_stats(user_id: str, days: int = 30) -> Dict[str, Any]:
         """Get comprehensive usage statistics for a user."""
+        # Handle demo user case
+        if user_id == 'demo-user-id':
+            # Return mock usage stats for demo user
+            demo_today_tokens = 5000
+            demo_today_percentage = demo_today_tokens / UsageLimitsService.MAX_DAILY_TOKENS_PER_USER
+
+            return {
+                'period_days': days,
+                'total_calls': 25,
+                'total_input_tokens': 15000,
+                'total_output_tokens': 8500,
+                'total_tokens': 23500,
+                'total_cost': 0.75,
+                'today_tokens': demo_today_tokens,
+                'today_percentage': demo_today_percentage,
+                'daily_limit': UsageLimitsService.MAX_DAILY_TOKENS_PER_USER,
+                'warning': demo_today_percentage >= UsageLimitsService.WARNING_THRESHOLD,
+                'models_used': ['claude-sonnet', 'claude-haiku']
+            }
+
         end_date = datetime.utcnow().date()
         start_date = end_date - timedelta(days=days)
 

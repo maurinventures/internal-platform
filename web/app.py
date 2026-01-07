@@ -4487,6 +4487,71 @@ def api_clean_usage_cache():
         return jsonify({'error': 'Failed to clean cache', 'details': str(e)}), 500
 
 
+@app.route('/api/usage/status', methods=['GET'])
+def api_usage_status():
+    """Get current usage status for the authenticated user."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+
+    try:
+        from services.usage_limits_service import UsageLimitsService
+
+        # Get current daily usage check
+        daily_check = UsageLimitsService.check_daily_user_limit(user_id)
+
+        response_data = {
+            'user_id': user_id,
+            'usage_allowed': daily_check['allowed'],
+            'daily_tokens_used': daily_check['usage'],
+            'daily_tokens_remaining': daily_check['limit'] - daily_check['usage'],
+            'daily_percentage_used': daily_check['percentage'],
+            'warning_active': daily_check['warning'],
+            'limit_reached': not daily_check['allowed'],
+            'max_daily_tokens': daily_check['limit']
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"[ERROR] Usage status API error: {e}")
+        return jsonify({'error': 'Failed to get usage status', 'details': str(e)}), 500
+
+
+@app.route('/api/usage/limits', methods=['GET'])
+def api_usage_limits():
+    """Get usage limits and pricing information."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        from services.usage_limits_service import UsageLimitsService
+
+        response_data = {
+            'limits': {
+                'max_daily_tokens_per_user': UsageLimitsService.MAX_DAILY_TOKENS_PER_USER,
+                'max_context_tokens_per_request': UsageLimitsService.MAX_CONTEXT_TOKENS,
+                'warning_threshold_percent': UsageLimitsService.WARNING_THRESHOLD * 100
+            },
+            'model_pricing': {
+                model: {
+                    'input_cost_per_1k_tokens': input_rate,
+                    'output_cost_per_1k_tokens': output_rate,
+                    'currency': 'USD'
+                }
+                for model, (input_rate, output_rate) in UsageLimitsService.MODEL_COSTS.items()
+            },
+            'supported_models': list(UsageLimitsService.MODEL_COSTS.keys())
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"[ERROR] Usage limits API error: {e}")
+        return jsonify({'error': 'Failed to get usage limits', 'details': str(e)}), 500
+
+
 # Prompt 20: Generation Pipeline API Endpoints
 @app.route('/api/generation/jobs', methods=['POST'])
 def api_create_generation_job():
