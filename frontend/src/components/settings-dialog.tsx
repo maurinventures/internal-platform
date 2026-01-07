@@ -27,7 +27,7 @@ export function SettingsDialog({ open, onOpenChange, onLogout, userEmail }: Sett
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Customize your Resonance AI experience
+            Customize your Internal Platform experience
           </DialogDescription>
         </DialogHeader>
 

@@ -187,9 +187,9 @@ export function Sidebar({
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
-              <span className="text-[10px] font-semibold text-primary-foreground">R</span>
+              <span className="text-[10px] font-semibold text-primary-foreground">I</span>
             </div>
-            <span className="text-[13px] font-semibold">Resonance AI</span>
+            <span className="text-[13px] font-semibold">Internal Platform</span>
           </div>
         )}
         <Button

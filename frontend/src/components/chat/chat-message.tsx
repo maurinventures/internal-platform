@@ -86,7 +86,7 @@ export function ChatMessage({ role, content, timestamp, onRegenerate, scriptData
               {/* Content - starts at the same left edge as chat input */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-[12px]">Resonance AI</span>
+                  <span className="font-medium text-[12px]">Internal Platform</span>
                   {timestamp && (
                     <span className="text-[11px] text-muted-foreground">{timestamp}</span>
                   )}
@@ -161,8 +161,8 @@ export function ChatMessage({ role, content, timestamp, onRegenerate, scriptData
             </DialogTitle>
             <DialogDescription>
               {feedbackType === "up" 
-                ? "Your feedback helps Resonance AI learn what works well and improve future responses."
-                : "Your feedback helps Resonance AI learn from mistakes and improve the quality of future responses."
+                ? "Your feedback helps Internal Platform learn what works well and improve future responses."
+                : "Your feedback helps Internal Platform learn from mistakes and improve the quality of future responses."
               }
             </DialogDescription>
           </DialogHeader>

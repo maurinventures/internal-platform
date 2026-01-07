@@ -15,7 +15,7 @@ export function LoadingMessage() {
           {/* Content */}
           <div className="flex-1 min-w-0 space-y-3">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-sm">Resonance AI</span>
+              <span className="font-medium text-sm">Internal Platform</span>
             </div>
 
             <div className="flex items-center gap-2">
