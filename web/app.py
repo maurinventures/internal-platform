@@ -1717,6 +1717,7 @@ def login():
             session['pending_2fa_setup_user_id'] = str(user.id)
             session['pending_2fa_setup_email'] = user.email
             session['pending_2fa_setup_name'] = user.name
+            session.modified = True  # Explicitly mark session as modified
             return redirect(url_for('setup_2fa_after_verify'))
 
     return render_template('login.html')
@@ -1920,6 +1921,7 @@ def verify_email():
         session['pending_2fa_setup_user_id'] = str(user.id)
         session['pending_2fa_setup_email'] = user.email
         session['pending_2fa_setup_name'] = user.name
+        session.modified = True  # Explicitly mark session as modified
 
         # Redirect to 2FA setup (mandatory)
         return redirect(url_for('setup_2fa_after_verify'))
@@ -4078,12 +4080,14 @@ def api_auth_login():
         if result.get('requires_2fa'):
             session['pending_2fa_user_id'] = result['user_id']
             session['pending_2fa_email'] = result['user']['email']
+            session.modified = True  # Explicitly mark session as modified
             return jsonify(result)
 
         if result.get('requires_2fa_setup'):
             session['pending_2fa_setup_user_id'] = result['user_id']
             session['pending_2fa_setup_email'] = result['user']['email']
             session['pending_2fa_setup_name'] = result['user']['name']
+            session.modified = True  # Explicitly mark session as modified
             return jsonify(result)
 
         return jsonify(result)
@@ -4136,12 +4140,16 @@ def api_auth_setup_2fa():
         # For initial setup (no token provided) - generate QR code
         if not token:
             if 'pending_2fa_setup_user_id' not in session:
+                print(f"2FA QR generation failed - no pending_2fa_setup_user_id in session")
                 return jsonify({'success': False, 'error': 'No pending 2FA setup'}), 400
+
+            print(f"2FA QR generation - found user_id in session: {session.get('pending_2fa_setup_user_id')}")
 
             qr_data = AuthService.setup_2fa_secret()
 
             # Store secret temporarily in session for verification
             session['pending_2fa_secret'] = qr_data['secret']
+            session.modified = True  # Explicitly mark session as modified
 
             return jsonify({
                 'success': True,
@@ -4151,7 +4159,13 @@ def api_auth_setup_2fa():
 
         # For verification (token provided) - complete setup
         else:
-            if 'pending_2fa_setup_user_id' not in session or 'pending_2fa_secret' not in session:
+            # Debug session state
+            has_user_id = 'pending_2fa_setup_user_id' in session
+            has_secret = 'pending_2fa_secret' in session
+            print(f"2FA completion - Session debug: user_id={has_user_id}, secret={has_secret}")
+
+            if not has_user_id or not has_secret:
+                print(f"2FA completion failed - missing session data: user_id={has_user_id}, secret={has_secret}")
                 return jsonify({'success': False, 'error': 'No pending 2FA setup'}), 400
 
             user_id = session['pending_2fa_setup_user_id']
