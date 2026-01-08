@@ -4143,10 +4143,7 @@ def api_auth_setup_2fa():
             if 'pending_2fa_setup_user_id' not in session:
                 return jsonify({
                     'success': False,
-                    'error': 'No pending 2FA setup',
-                    'debug': {
-                        'session_keys': list(session.keys()) if session else []
-                    }
+                    'error': 'No pending 2FA setup'
                 }), 400
 
             qr_data = AuthService.setup_2fa_secret()
@@ -4169,29 +4166,16 @@ def api_auth_setup_2fa():
             return jsonify({
                 'success': True,
                 'qr_code': qr_data['qr_code'],
-                'secret': qr_data['secret'],
-                'debug': {
-                    'user_id_in_session': session.get('pending_2fa_setup_user_id'),
-                    'secret_stored': True,
-                    'session_modified': True,
-                    'session_permanent': session.permanent
-                }
+                'secret': qr_data['secret']
             })
 
         # For verification (token provided) - complete setup
         else:
-            # Debug session state
-            has_user_id = 'pending_2fa_setup_user_id' in session
-            has_secret = 'totp_setup_secret' in session
-            debug_info = {
-                'has_user_id': has_user_id,
-                'has_secret': has_secret,
-                'session_keys': list(session.keys()) if session else [],
-                'session_permanent': session.permanent
-            }
-
             user_id = session.get('pending_2fa_setup_user_id')
             secret = session.get('totp_setup_secret')
+
+            has_user_id = bool(user_id)
+            has_secret = bool(secret)
 
             # If session doesn't have secret, try database backup
             if not has_secret and has_user_id:
@@ -4200,13 +4184,11 @@ def api_auth_setup_2fa():
                     if user and user.temp_2fa_secret:
                         secret = user.temp_2fa_secret
                         has_secret = True
-                        debug_info['secret_source'] = 'database_backup'
 
             if not has_user_id or not has_secret:
                 return jsonify({
                     'success': False,
-                    'error': 'No pending 2FA setup',
-                    'debug': debug_info
+                    'error': 'No pending 2FA setup'
                 }), 400
 
             result = AuthService.complete_2fa_setup(user_id, secret, token)
