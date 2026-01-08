@@ -57,10 +57,9 @@ def get_ses_client():
 
 
 def send_verification_email(to_email: str, name: str, verification_token: str) -> bool:
-    """Send email verification link via AWS SES."""
+    """Send email verification code via AWS SES."""
     try:
         ses = get_ses_client()
-        verification_url = f"https://maurinventuresinternal.com/verify-email?token={verification_token}"
 
         html_body = f"""
         <html>
@@ -71,11 +70,11 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
                 </div>
                 <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px; text-align: center;">Verify Your Email</h1>
                 <p style="color: #444; font-size: 16px; line-height: 1.6;">Hi {name},</p>
-                <p style="color: #444; font-size: 16px; line-height: 1.6;">Welcome to MV Internal! Please verify your email address by clicking the button below:</p>
+                <p style="color: #444; font-size: 16px; line-height: 1.6;">Welcome to MV Internal! Please enter this verification code in the app:</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{verification_url}" style="display: inline-block; background: #d97757; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Verify Email</a>
+                    <div style="display: inline-block; background: #f0f0f0; color: #333; padding: 20px 30px; border-radius: 8px; font-weight: bold; font-size: 32px; letter-spacing: 4px; font-family: 'Courier New', monospace;">{verification_token}</div>
                 </div>
-                <p style="color: #666; font-size: 14px; line-height: 1.6;">This link expires in 24 hours.</p>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">This code expires in 24 hours.</p>
                 <p style="color: #666; font-size: 14px; line-height: 1.6;">If you didn't create an account, you can safely ignore this email.</p>
                 <hr style="border: none; border-top: 1px solid #e5e4df; margin: 30px 0;">
                 <p style="color: #999; font-size: 12px; text-align: center;">MV Internal - Maurin Ventures</p>
@@ -87,19 +86,19 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
         text_body = f"""
 Hi {name},
 
-Welcome to MV Internal! Please verify your email address by clicking this link:
+Welcome to MV Internal! Please enter this verification code in the app:
 
-{verification_url}
+{verification_token}
 
-This link expires in 24 hours.
+This code expires in 24 hours.
 
 If you didn't create an account, you can safely ignore this email.
 
-- MV Internal Team
+MV Internal - Maurin Ventures
         """
 
         ses.send_email(
-            Source="MV Internal <noreply@maurinventuresinternal.com>",
+            Source="ops@maurinventures.com",
             Destination={"ToAddresses": [to_email]},
             Message={
                 "Subject": {"Data": "Verify your email - MV Internal", "Charset": "UTF-8"},
@@ -111,7 +110,9 @@ If you didn't create an account, you can safely ignore this email.
         )
         return True
     except Exception as e:
-        print(f"Failed to send verification email: {e}")
+        print(f"Email sending error: {e}")
+        # Fallback: log verification code for development
+        print(f"VERIFICATION CODE for {to_email}: {verification_token}")
         return False
 
 
@@ -167,7 +168,7 @@ Please change your password after your first login.
         """
 
         ses.send_email(
-            Source="MV Internal <noreply@maurinventuresinternal.com>",
+            Source="ops@maurinventures.com",
             Destination={"ToAddresses": [to_email]},
             Message={
                 "Subject": {"Data": "You're invited to MV Internal", "Charset": "UTF-8"},
@@ -1863,8 +1864,8 @@ def register():
             if existing:
                 return render_template('register.html', error='Email already registered')
 
-            # Generate verification token
-            verification_token = secrets.token_urlsafe(32)
+            # Generate verification code (6 digits)
+            verification_token = str(secrets.randbelow(900000) + 100000)  # 6-digit code
             token_expires = datetime.utcnow() + timedelta(hours=24)
 
             # Create user (unverified)
