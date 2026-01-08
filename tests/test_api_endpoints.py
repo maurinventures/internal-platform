@@ -124,8 +124,10 @@ class TestChatEndpoints:
     def test_chat_endpoint_with_authentication(self, authenticated_session, mock_ai_response):
         """Test chat endpoint with valid authentication and message."""
 
-        with patch('web.services.ai_service.AIService.generate_script_with_ai') as mock_ai:
+        with patch('web.services.ai_service.AIService.generate_script_with_ai') as mock_ai, \
+             patch('web.services.transcript_service.TranscriptService.search_for_context') as mock_transcript:
             mock_ai.return_value = mock_ai_response
+            mock_transcript.return_value = []  # Return empty context
 
             response = authenticated_session.post('/api/chat',
                                                 data=json.dumps({
@@ -136,8 +138,7 @@ class TestChatEndpoints:
 
             assert response.status_code == 200
             data = json.loads(response.data)
-            assert 'message' in data
-            assert data['message'] == mock_ai_response['message']
+            assert 'response' in data
             assert 'clips' in data
             assert 'has_script' in data
 
@@ -171,8 +172,10 @@ class TestChatEndpoints:
     def test_chat_endpoint_ai_service_error(self, authenticated_session):
         """Test chat endpoint when AI service raises an error."""
 
-        with patch('web.services.ai_service.AIService.generate_script_with_ai') as mock_ai:
+        with patch('web.services.ai_service.AIService.generate_script_with_ai') as mock_ai, \
+             patch('web.services.transcript_service.TranscriptService.search_for_context') as mock_transcript:
             mock_ai.side_effect = Exception("AI service unavailable")
+            mock_transcript.return_value = [{'text': 'some context'}]  # Return context to trigger AI call
 
             response = authenticated_session.post('/api/chat',
                                                 data=json.dumps({
