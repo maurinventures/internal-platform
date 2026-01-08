@@ -51,7 +51,7 @@ class AIService:
     def get_openai_client():
         """Get OpenAI client."""
         config = get_config()
-        api_key = config.secrets.get("openai", {}).get("api_key")
+        api_key = config.openai_api_key
         if not api_key:
             raise ValueError("OpenAI API key not configured")
         return OpenAI(api_key=api_key)
@@ -60,7 +60,7 @@ class AIService:
     def get_anthropic_client():
         """Get Anthropic client."""
         config = get_config()
-        api_key = config.secrets.get("anthropic", {}).get("api_key")
+        api_key = config.anthropic_api_key
         if not api_key:
             raise ValueError("Anthropic API key not configured. Add your key to config/credentials.yaml")
         return anthropic.Anthropic(api_key=api_key)
