@@ -310,7 +310,9 @@ class AuthService:
             db_session.commit()
 
             # Send verification email
-            AuthService.send_verification_email(email, name, verification_token)
+            print(f"DEBUG: Attempting to send verification email to {email}")
+            email_sent = AuthService.send_verification_email(email, name, verification_token)
+            print(f"DEBUG: Email sending result: {email_sent}")
 
             return {
                 'success': True,
@@ -428,7 +430,9 @@ class AuthService:
             True if email sent successfully, False otherwise
         """
         try:
+            print(f"DEBUG: Starting email send to {to_email} with code {verification_token}")
             ses = get_ses_client()
+            print(f"DEBUG: SES client created successfully")
 
             html_body = f"""
             <html>
@@ -466,6 +470,7 @@ class AuthService:
             MV Internal - Maurin Ventures
             """
 
+            print(f"DEBUG: About to send SES email from ops@maurinventures.com to {to_email}")
             response = ses.send_email(
                 Source="ops@maurinventures.com",
                 Destination={'ToAddresses': [to_email]},
@@ -477,6 +482,8 @@ class AuthService:
                     }
                 }
             )
+            print(f"DEBUG: SES email sent successfully! Response: {response}")
+            print(f"SUCCESS: Verification email sent to {to_email} with code {verification_token}")
 
             return True
 
