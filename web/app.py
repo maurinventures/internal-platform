@@ -4156,6 +4156,16 @@ def api_auth_setup_2fa():
             session['totp_setup_secret'] = qr_data['secret']  # Try different key name
             session.modified = True  # Explicitly mark session as modified
 
+            # ALSO store in database as backup (for multi-worker safety)
+            user_id = session.get('pending_2fa_setup_user_id')
+            if user_id:
+                with DatabaseSession() as db_session:
+                    user = db_session.query(User).filter(User.id == UUID(user_id)).first()
+                    if user:
+                        # Store in temp field - we'll clear this after completion
+                        user.temp_2fa_secret = qr_data['secret']
+                        db_session.commit()
+
             return jsonify({
                 'success': True,
                 'qr_code': qr_data['qr_code'],
@@ -4180,15 +4190,24 @@ def api_auth_setup_2fa():
                 'session_permanent': session.permanent
             }
 
+            user_id = session.get('pending_2fa_setup_user_id')
+            secret = session.get('totp_setup_secret')
+
+            # If session doesn't have secret, try database backup
+            if not has_secret and has_user_id:
+                with DatabaseSession() as db_session:
+                    user = db_session.query(User).filter(User.id == UUID(user_id)).first()
+                    if user and user.temp_2fa_secret:
+                        secret = user.temp_2fa_secret
+                        has_secret = True
+                        debug_info['secret_source'] = 'database_backup'
+
             if not has_user_id or not has_secret:
                 return jsonify({
                     'success': False,
                     'error': 'No pending 2FA setup',
                     'debug': debug_info
                 }), 400
-
-            user_id = session['pending_2fa_setup_user_id']
-            secret = session['totp_setup_secret']
 
             result = AuthService.complete_2fa_setup(user_id, secret, token)
 
@@ -4202,6 +4221,13 @@ def api_auth_setup_2fa():
                 session.pop('pending_2fa_setup_email', None)
                 session.pop('pending_2fa_setup_name', None)
                 session.pop('totp_setup_secret', None)
+
+                # Clear database backup
+                with DatabaseSession() as db_session:
+                    user = db_session.query(User).filter(User.id == UUID(user_id)).first()
+                    if user:
+                        user.temp_2fa_secret = None
+                        db_session.commit()
 
                 # Get updated user data
                 user = AuthService.get_user_by_id(user_id)

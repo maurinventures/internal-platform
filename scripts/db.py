@@ -227,6 +227,7 @@ class User(Base):
     is_active = Column(Integer, default=1)
     totp_secret = Column(String(32), nullable=True)  # 2FA secret key
     totp_enabled = Column(Integer, default=0)  # 1 = 2FA required
+    temp_2fa_secret = Column(String(32), nullable=True)  # Temporary storage during setup
     email_verified = Column(Integer, default=0)  # 1 = email verified
     verification_token = Column(String(64), nullable=True)  # Email verification token
     verification_token_expires = Column(DateTime(timezone=True), nullable=True)
