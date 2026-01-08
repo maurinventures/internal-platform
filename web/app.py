@@ -138,10 +138,10 @@ CORS(app,
 # Session configuration - persistent sessions that survive browser close
 # Secret key is fixed so sessions persist across server restarts
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'mv-internal-secret-key-2026-change-in-production')
-app.config['SESSION_COOKIE_SECURE'] = False  # Allow HTTP for development
+app.config['SESSION_COOKIE_SECURE'] = True  # Secure cookies in production (HTTPS)
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = 604800  # 7 days in seconds
+app.config['PERMANENT_SESSION_LIFETIME'] = 1209600  # 14 days in seconds (2 weeks)
 
 
 def format_duration(seconds):
@@ -4034,6 +4034,7 @@ def api_auth_login():
 
         # Handle demo mode
         if result.get('is_demo'):
+            session.permanent = True  # Make session permanent (14 days)
             session['user_id'] = AuthService.DEMO_USER_ID
             session['user_email'] = email
             return jsonify(result)
@@ -4440,24 +4441,26 @@ def api_auth_resend_verification():
 
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
-    """Logout user."""
-    # Set logout flag before clearing session
-    session['logged_out'] = True
+    """Logout user and clear all session data."""
+    from flask import make_response
 
-    # Explicitly remove session keys
-    session.pop('user_id', None)
-    session.pop('user_name', None)
-    session.pop('user_email', None)
-    session.pop('pending_2fa_user_id', None)
-    session.pop('pending_2fa_email', None)
-    session.pop('totp_setup_secret', None)
-
-    # Clear any remaining session data except logout flag
-    user_logged_out = session.get('logged_out')
+    # Clear all session data
     session.clear()
-    if user_logged_out:
-        session['logged_out'] = True
-    return jsonify({'success': True})
+
+    # Create response
+    response = make_response(jsonify({'success': True}))
+
+    # Explicitly clear session cookie by setting it to expire
+    response.set_cookie(
+        app.session_cookie_name,
+        '',
+        expires=0,
+        httponly=True,
+        secure=True,  # Always use secure cookies
+        samesite='Lax'
+    )
+
+    return response
 
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
