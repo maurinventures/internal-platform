@@ -289,7 +289,7 @@ class AuthService:
                 name=name,
                 password_hash=password_hash,
                 is_active=1,
-                email_verified=1,  # TEMP: Skip email verification for development
+                email_verified=0,  # Require email verification
                 totp_enabled=0,    # Will be set up after email verification
                 verification_token=verification_token,
                 verification_token_expires=expires_at
@@ -297,8 +297,8 @@ class AuthService:
             db_session.add(user)
             db_session.commit()
 
-            # Send verification email (currently just prints)
-            # AuthService.send_verification_email(email, name, verification_token)
+            # Send verification email
+            AuthService.send_verification_email(email, name, verification_token)
 
             return {
                 'success': True,
