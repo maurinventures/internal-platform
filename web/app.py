@@ -4153,7 +4153,7 @@ def api_auth_setup_2fa():
 
             # Store secret temporarily in session for verification
             session.permanent = True  # Make session permanent
-            session['pending_2fa_secret'] = qr_data['secret']
+            session['totp_setup_secret'] = qr_data['secret']  # Try different key name
             session.modified = True  # Explicitly mark session as modified
 
             return jsonify({
@@ -4172,7 +4172,7 @@ def api_auth_setup_2fa():
         else:
             # Debug session state
             has_user_id = 'pending_2fa_setup_user_id' in session
-            has_secret = 'pending_2fa_secret' in session
+            has_secret = 'totp_setup_secret' in session
             debug_info = {
                 'has_user_id': has_user_id,
                 'has_secret': has_secret,
@@ -4188,7 +4188,7 @@ def api_auth_setup_2fa():
                 }), 400
 
             user_id = session['pending_2fa_setup_user_id']
-            secret = session['pending_2fa_secret']
+            secret = session['totp_setup_secret']
 
             result = AuthService.complete_2fa_setup(user_id, secret, token)
 
@@ -4201,7 +4201,7 @@ def api_auth_setup_2fa():
                 session.pop('pending_2fa_setup_user_id', None)
                 session.pop('pending_2fa_setup_email', None)
                 session.pop('pending_2fa_setup_name', None)
-                session.pop('pending_2fa_secret', None)
+                session.pop('totp_setup_secret', None)
 
                 # Get updated user data
                 user = AuthService.get_user_by_id(user_id)
@@ -4433,7 +4433,7 @@ def api_auth_logout():
     session.pop('user_email', None)
     session.pop('pending_2fa_user_id', None)
     session.pop('pending_2fa_email', None)
-    session.pop('pending_2fa_secret', None)
+    session.pop('totp_setup_secret', None)
 
     # Clear any remaining session data except logout flag
     user_logged_out = session.get('logged_out')
