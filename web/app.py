@@ -2801,6 +2801,17 @@ def api_chat():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
 
+        # Validate conversation_id if provided
+        valid_conversation_id = None
+        if conversation_id:
+            try:
+                valid_conversation_id = UUID(conversation_id)
+                conversation_id = str(valid_conversation_id)
+            except (ValueError, TypeError) as uuid_error:
+                print(f"Invalid conversation_id received: '{conversation_id}' - {str(uuid_error)}")
+                # Set to None to skip database operations
+                conversation_id = None
+
 
         # Get preferred model from conversation if not specified
         if not model and conversation_id:
@@ -3062,7 +3073,16 @@ def api_chat():
 
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        error_traceback = traceback.format_exc()
+        print(f"=== CHAT API ERROR ===")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        print(f"Request data: {request.json}")
+        print(f"Session user_id: {session.get('user_id')}")
+        print(f"Full traceback:")
+        print(error_traceback)
+        print("=== END ERROR ===")
+
         return jsonify({
             'error': f'Server error: {str(e)}',
             'response': f'Sorry, there was an error processing your request: {str(e)}',
