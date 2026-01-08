@@ -5098,6 +5098,161 @@ def api_upload_external_content():
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 
+# Library API endpoints for real data loading
+@app.route('/api/library/videos', methods=['GET'])
+def api_library_videos():
+    """Get all videos for library view."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        with DatabaseSession() as db_session:
+            videos = db_session.query(Video).order_by(Video.created_at.desc()).all()
+
+            video_list = []
+            for video in videos:
+                # Format duration
+                duration_str = "0:00"
+                if video.duration_seconds:
+                    minutes = int(float(video.duration_seconds)) // 60
+                    seconds = int(float(video.duration_seconds)) % 60
+                    duration_str = f"{minutes}:{seconds:02d}"
+
+                # Format date
+                date_str = video.created_at.strftime("%b %d, %Y") if video.created_at else ""
+
+                video_list.append({
+                    'id': str(video.id),
+                    'fileName': video.original_filename,
+                    'description': video.uploaded_by or "Video recording",
+                    'keyPeople': [],  # Could be extracted from metadata later
+                    'length': duration_str,
+                    'date': date_str
+                })
+
+            return jsonify({'videos': video_list})
+
+    except Exception as e:
+        print(f"Error fetching videos: {e}")
+        return jsonify({'error': 'Failed to fetch videos'}), 500
+
+
+@app.route('/api/library/audio', methods=['GET'])
+def api_library_audio():
+    """Get all audio recordings for library view."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        with DatabaseSession() as db_session:
+            audio_recordings = db_session.query(AudioRecording).order_by(AudioRecording.created_at.desc()).all()
+
+            audio_list = []
+            for audio in audio_recordings:
+                # Format duration
+                duration_str = "0:00"
+                if audio.duration_seconds:
+                    minutes = int(float(audio.duration_seconds)) // 60
+                    seconds = int(float(audio.duration_seconds)) % 60
+                    duration_str = f"{minutes}:{seconds:02d}"
+
+                # Format date
+                date_str = audio.created_at.strftime("%b %d, %Y") if audio.created_at else ""
+
+                audio_list.append({
+                    'id': str(audio.id),
+                    'fileName': audio.filename,
+                    'description': audio.source or "Audio recording",
+                    'keyPeople': [],  # Could be extracted from metadata later
+                    'length': duration_str,
+                    'date': date_str
+                })
+
+            return jsonify({'audio': audio_list})
+
+    except Exception as e:
+        print(f"Error fetching audio: {e}")
+        return jsonify({'error': 'Failed to fetch audio recordings'}), 500
+
+
+@app.route('/api/library/transcripts', methods=['GET'])
+def api_library_transcripts():
+    """Get all transcripts for library view."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        with DatabaseSession() as db_session:
+            transcripts = db_session.query(Transcript).filter(
+                Transcript.status == 'completed'
+            ).order_by(Transcript.created_at.desc()).all()
+
+            transcript_list = []
+            for transcript in transcripts:
+                # Get associated video for filename
+                video = db_session.query(Video).filter(Video.id == transcript.video_id).first()
+                filename = f"{video.original_filename.rsplit('.', 1)[0]}_transcript.txt" if video else f"transcript_{transcript.id}.txt"
+
+                # Calculate word count approximation
+                word_count = 0
+                if transcript.content:
+                    word_count = len(transcript.content.split())
+
+                # Format date
+                date_str = transcript.created_at.strftime("%b %d, %Y") if transcript.created_at else ""
+
+                transcript_list.append({
+                    'id': str(transcript.id),
+                    'fileName': filename,
+                    'description': f"Transcript of {video.original_filename if video else 'video'}",
+                    'keyPeople': [],  # Could extract from transcript content later
+                    'length': f"{word_count:,} words",
+                    'date': date_str
+                })
+
+            return jsonify({'transcripts': transcript_list})
+
+    except Exception as e:
+        print(f"Error fetching transcripts: {e}")
+        return jsonify({'error': 'Failed to fetch transcripts'}), 500
+
+
+@app.route('/api/library/documents', methods=['GET'])
+def api_library_documents():
+    """Get all documents/PDFs for library view."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        with DatabaseSession() as db_session:
+            documents = db_session.query(Document).order_by(Document.created_at.desc()).all()
+
+            document_list = []
+            for doc in documents:
+                # Format date
+                date_str = doc.created_at.strftime("%b %d, %Y") if doc.created_at else ""
+
+                # Calculate size (words to pages approximation)
+                pages = 1
+                if doc.word_count:
+                    pages = max(1, doc.word_count // 250)  # ~250 words per page
+
+                document_list.append({
+                    'id': str(doc.id),
+                    'fileName': f"{doc.title}.pdf",  # Most docs are PDFs in this context
+                    'description': doc.title,
+                    'keyPeople': [],  # Could be extracted from content later
+                    'length': f"{pages} page{'s' if pages != 1 else ''}",
+                    'date': date_str
+                })
+
+            return jsonify({'documents': document_list})
+
+    except Exception as e:
+        print(f"Error fetching documents: {e}")
+        return jsonify({'error': 'Failed to fetch documents'}), 500
+
+
 # Helper functions for email sending
 
 
