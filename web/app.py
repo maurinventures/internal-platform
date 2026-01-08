@@ -4287,7 +4287,16 @@ def api_auth_register():
     """Register new user with email verification."""
     try:
         print(f"DEBUG: Registration request received")
-        data = request.json or {}
+        print(f"DEBUG: Content-Type: {request.content_type}")
+        print(f"DEBUG: Raw data: {request.get_data()[:200]}")  # First 200 chars to avoid logs getting too large
+
+        # Safer JSON parsing
+        try:
+            data = request.get_json(force=True) or {}
+        except Exception as json_error:
+            print(f"DEBUG: JSON parsing error: {json_error}")
+            return jsonify({'success': False, 'error': 'Invalid JSON in request body'}), 400
+
         name = data.get('name', '')
         email = data.get('email', '')
         password = data.get('password', '')
