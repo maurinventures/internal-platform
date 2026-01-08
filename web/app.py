@@ -4141,12 +4141,18 @@ def api_auth_setup_2fa():
         # For initial setup (no token provided) - generate QR code
         if not token:
             if 'pending_2fa_setup_user_id' not in session:
+                print(f"2FA setup failed: No pending_2fa_setup_user_id in session")
+                print(f"Session keys: {list(session.keys())}")
                 return jsonify({
                     'success': False,
                     'error': 'No pending 2FA setup'
                 }), 400
 
+            user_id = session.get('pending_2fa_setup_user_id')
+            print(f"Generating 2FA QR code for user: {user_id}")
+
             qr_data = AuthService.setup_2fa_secret()
+            print(f"QR code generated successfully, length: {len(qr_data['qr_code'])} chars")
 
             # Store secret temporarily in session for verification
             session.permanent = True  # Make session permanent
@@ -4413,6 +4419,8 @@ def api_auth_verify_email():
         # If email verification succeeded, set up 2FA setup session
         if result['success'] and result.get('user'):
             user = result['user']
+            print(f"Email verification successful for: {user['email']} (ID: {user['id']})")
+
             # Since 2FA is mandatory for all users, set up the 2FA setup session
             session.permanent = True  # Make session permanent
             session['pending_2fa_setup_user_id'] = user['id']
@@ -4422,6 +4430,9 @@ def api_auth_verify_email():
 
             # Add requires_2fa_setup to the response
             result['requires_2fa_setup'] = True
+            print(f"2FA setup session established for user: {user['id']}")
+        else:
+            print(f"Email verification failed: {result.get('error', 'Unknown error')}")
 
         return jsonify(result), 200 if result['success'] else 400
 
