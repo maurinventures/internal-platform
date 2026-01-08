@@ -22,7 +22,24 @@ def mock_external_dependencies():
 
     # Mock database session
     with patch('scripts.db.DatabaseSession') as mock_db_session:
+        from datetime import datetime
         mock_db = MagicMock()
+
+        # Create a proper user mock that will be returned by the query chain
+        mock_user_instance = Mock()
+        mock_user_instance.id = '550e8400-e29b-41d4-a716-446655440000'
+        mock_user_instance.email = 'test@example.com'
+        mock_user_instance.name = 'Test User'
+        mock_user_instance.is_active = True
+        mock_user_instance.email_verified = True
+        mock_user_instance.totp_enabled = False
+        mock_user_instance.created_at = datetime(2024, 1, 1, 12, 0, 0)
+        mock_user_instance.last_login = datetime(2024, 1, 2, 10, 0, 0)
+        mock_user_instance.check_password.return_value = True
+
+        # Configure the query chain to return our mock user
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_user_instance
+
         mock_db_session.return_value.__enter__ = Mock(return_value=mock_db)
         mock_db_session.return_value.__exit__ = Mock(return_value=None)
 
@@ -89,7 +106,7 @@ def runner(app):
 def mock_user_session():
     """Mock user session data."""
     return {
-        'user_id': 'test-user-123',
+        'user_id': '550e8400-e29b-41d4-a716-446655440000',
         'user_email': 'test@example.com',
         'user_name': 'Test User'
     }
@@ -172,7 +189,7 @@ def mock_library_content():
 def mock_user_data():
     """Mock user data for authentication tests."""
     return {
-        'id': 'test-user-123',
+        'id': '550e8400-e29b-41d4-a716-446655440000',
         'email': 'test@example.com',
         'name': 'Test User',
         'password_hash': 'hashed_password_for_testing'
@@ -189,10 +206,16 @@ def mock_database_operations():
          patch('scripts.db.GenerationJob') as mock_generation_job_model:
 
         # Mock User query operations
+        from datetime import datetime
         mock_user_instance = Mock()
-        mock_user_instance.id = 'test-user-123'
+        mock_user_instance.id = '550e8400-e29b-41d4-a716-446655440000'
         mock_user_instance.email = 'test@example.com'
         mock_user_instance.name = 'Test User'
+        mock_user_instance.is_active = True
+        mock_user_instance.email_verified = True
+        mock_user_instance.totp_enabled = False
+        mock_user_instance.created_at = datetime(2024, 1, 1, 12, 0, 0)
+        mock_user_instance.last_login = datetime(2024, 1, 2, 10, 0, 0)
         mock_user_instance.check_password.return_value = True
 
         mock_user_model.query.filter.return_value.first.return_value = mock_user_instance
