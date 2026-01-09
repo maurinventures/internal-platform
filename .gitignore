@@ -81,3 +81,6 @@ comprehensive_*.txt
 verify.txt
 *.db
 !migrations/*.db
+_archive/
+archive/
+*.backup.*/
