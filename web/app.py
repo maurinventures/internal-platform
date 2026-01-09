@@ -5301,10 +5301,10 @@ def api_library_transcripts():
                 video = db_session.query(Video).filter(Video.id == transcript.video_id).first()
                 filename = f"{video.original_filename.rsplit('.', 1)[0]}_transcript.txt" if video else f"transcript_{transcript.id}.txt"
 
-                # Calculate word count approximation
-                word_count = 0
-                if transcript.content:
-                    word_count = len(transcript.content.split())
+                # Use existing word count or calculate from full_text
+                word_count = transcript.word_count or 0
+                if word_count == 0 and transcript.full_text:
+                    word_count = len(transcript.full_text.split())
 
                 # Format date
                 date_str = transcript.created_at.strftime("%b %d, %Y") if transcript.created_at else ""
