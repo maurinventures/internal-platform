@@ -2072,6 +2072,56 @@ def api_get_conversation(conversation_id):
         })
 
 
+@app.route('/api/conversations/<conversation_id>/messages', methods=['POST'])
+def api_add_message(conversation_id):
+    """Add a new message to a conversation."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    data = request.json or {}
+    role = data.get('role')
+    content = data.get('content')
+    clips = data.get('clips', [])
+    model = data.get('model')
+
+    if not role or not content or role not in ['user', 'assistant']:
+        return jsonify({'error': 'Invalid message data'}), 400
+
+    with DatabaseSession() as db_session:
+        # Verify conversation belongs to user
+        conversation = db_session.query(Conversation).filter(
+            Conversation.id == UUID(conversation_id),
+            Conversation.user_id == UUID(session['user_id'])
+        ).first()
+
+        if not conversation:
+            return jsonify({'error': 'Conversation not found'}), 404
+
+        # Create new message
+        message = ChatMessage(
+            conversation_id=UUID(conversation_id),
+            role=role,
+            content=content,
+            clips_json=clips if clips else None,
+            model=model
+        )
+        db_session.add(message)
+
+        # Update conversation timestamp
+        conversation.updated_at = datetime.utcnow()
+
+        db_session.commit()
+
+        return jsonify({
+            'id': str(message.id),
+            'role': message.role,
+            'content': message.content,
+            'clips': message.clips_json or [],
+            'model': message.model,
+            'created_at': message.created_at.isoformat()
+        })
+
+
 # @app.route('/api/conversations/<conversation_id>', methods=['PUT'])
 def api_update_conversation(conversation_id):
     """Update conversation title."""
