@@ -652,7 +652,7 @@ TRANSCRIPT DATA:
             return {
                 "message": reconstructed,
                 "clips": validated_clips,
-                "has_script": len(validated_clips) > 0
+                "has_script": True  # Always True when script generation was attempted
             }
 
         except Exception as e:
